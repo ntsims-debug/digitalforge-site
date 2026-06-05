@@ -885,6 +885,7 @@
 
     .csv-table {
       width: 100%;
+      min-width: 1100px;
       border-collapse: collapse;
       font-size: 12px;
       font-family: var(--font-mono);
@@ -1989,7 +1990,7 @@
           <!-- CSV preview tab -->
           <div class="tab-panel" id="csvTab">
             <p class="text-muted mt-sm" style="margin-bottom:16px;">
-              This is the CSV that will be downloaded. Compatible with Vela bulk upload → Etsy.
+              This is exactly what downloads — all 11 columns, Vela-compatible for Etsy bulk upload. Scroll right to see every field. Long text is truncated here for readability but exports in full.
             </p>
             <div class="csv-table-wrapper">
               <table class="csv-table" id="csvPreviewTable">
@@ -1997,9 +1998,16 @@
                   <tr>
                     <th>#</th>
                     <th>Title</th>
+                    <th>Description</th>
                     <th>Category</th>
+                    <th>Who made it?</th>
+                    <th>What is it?</th>
+                    <th>When made?</th>
+                    <th>Product type</th>
                     <th>Price</th>
+                    <th>Qty</th>
                     <th>Tags</th>
+                    <th>Pinterest Pin Description</th>
                   </tr>
                 </thead>
                 <tbody id="csvPreviewBody"></tbody>
@@ -2092,7 +2100,7 @@
         <div class="advanced-toggle open" id="advancedToggle">
           <div class="advanced-toggle-left">
             <span class="advanced-toggle-title">Tools</span>
-            <span style="font-size:12px;color:var(--steel);font-weight:400;margin-left:10px;">Prompt Player · Resize Tool · and more</span>
+            <span style="font-size:12px;color:var(--steel);font-weight:400;margin-left:10px;">Prompt Player · Resize Tool</span>
           </div>
           <span class="advanced-toggle-arrow">⌄</span>
         </div>
@@ -2120,28 +2128,6 @@
                 <div class="tool-launcher-icon">🖼️</div>
                 <div class="tool-launcher-name">Resize Tool</div>
                 <div class="tool-launcher-desc">Batch resize your finished images to US standard and ISO print sizes — Cover (crop) or Contain (pad)</div>
-              </div>
-
-            </div>
-          </div>
-
-          <!-- GROUP 2: Detailed Control -->
-          <div class="tool-group">
-            <div class="tool-group-label">
-              Detailed Control <span>— for fine-tuning prompts and listings individually</span>
-            </div>
-            <div class="tools-grid">
-
-              <div class="tool-launcher" data-tool="promptgenerator" data-src="./tools/DigitalForge_PromptGenerator.html">
-                <div class="tool-launcher-icon">🎯</div>
-                <div class="tool-launcher-name">Prompt Generator</div>
-                <div class="tool-launcher-desc">Full manual control over niche, style, and prompt parameters — build prompts one by one</div>
-              </div>
-
-              <div class="tool-launcher" data-tool="listinggenerator" data-src="./tools/DigitalForge_ListingGenerator.html">
-                <div class="tool-launcher-icon">📋</div>
-                <div class="tool-launcher-name">Listing Generator</div>
-                <div class="tool-launcher-desc">Generate and fine-tune individual listings with full control over every Etsy field</div>
               </div>
 
             </div>
@@ -3474,16 +3460,28 @@ Return ONLY this JSON array, nothing else before or after:
   function renderCSVPreview() {
     const tbody = document.getElementById('csvPreviewBody');
     if (!STATE.generated.listings.length) {
-      tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--steel);padding:24px;">No listings to preview</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="12" style="text-align:center;color:var(--steel);padding:24px;">No listings to preview</td></tr>`;
       return;
     }
+    // Truncate helper — keeps the preview readable; full text still exports
+    const trunc = (str, n) => {
+      str = str || '';
+      return escapeHTML(str.substring(0, n)) + (str.length > n ? '…' : '');
+    };
     tbody.innerHTML = STATE.generated.listings.map((l, i) => `
       <tr>
         <td>${i + 1}</td>
-        <td title="${escapeHTML(l.title || '')}">${escapeHTML((l.title || '').substring(0, 40))}${l.title?.length > 40 ? '…' : ''}</td>
-        <td>${escapeHTML((l.category || '').split('|').pop())}</td>
-        <td>$${l.price}</td>
-        <td title="${escapeHTML(l.tags || '')}">${escapeHTML((l.tags || '').split(',').slice(0, 4).join(', '))}${(l.tags || '').split(',').length > 4 ? '…' : ''}</td>
+        <td title="${escapeHTML(l.title || '')}">${trunc(l.title, 40)}</td>
+        <td title="${escapeHTML(l.description || '')}">${trunc(l.description, 50)}</td>
+        <td title="${escapeHTML(l.category || CATEGORY_MAP[STATE.form.niche] || '')}">${trunc((l.category || CATEGORY_MAP[STATE.form.niche] || '').split('|').pop(), 24)}</td>
+        <td>${escapeHTML(l.whoMadeIt || 'I did')}</td>
+        <td>${escapeHTML(l.whatIsIt || 'A finished product')}</td>
+        <td>${escapeHTML(l.whenMade || '2020 - 2026')}</td>
+        <td>${escapeHTML(l.productType || 'Digital')}</td>
+        <td>$${l.price || STATE.form.price}</td>
+        <td>${escapeHTML(String(l.quantity || '999'))}</td>
+        <td title="${escapeHTML(l.tags || '')}">${trunc((l.tags || '').split(',').slice(0, 4).join(', '), 60)}${(l.tags || '').split(',').length > 4 ? ' …' : ''}</td>
+        <td title="${escapeHTML(l.pinterestDesc || '')}">${trunc(l.pinterestDesc, 50)}</td>
       </tr>
     `).join('');
   }
