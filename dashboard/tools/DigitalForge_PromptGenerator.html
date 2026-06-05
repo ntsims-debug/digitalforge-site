@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DigitalForge Pro — Prompt Generator</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Mono:wght@400;500&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--navy:#0A1628;--navy2:#162040;--gold:#E8A020;--goldlt:#F5D080;--goldpale:#FDF5E0;--teal:#1A8A6A;--teal2:#22A882;--red:#C13B2A;--gray:#6B7280;--lgray:#F3F4F6;--mid:#9CA3AF;--cream:#FAFAF8;--white:#FFFFFF;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Inter',sans-serif;background:linear-gradient(160deg,var(--navy) 0%,var(--navy2) 60%,#0A2010 100%);min-height:100vh;padding:40px 20px;color:var(--navy);}
+.app{max-width:880px;margin:0 auto;}
+.topbar{text-align:center;margin-bottom:36px;}
+.brand{font-family:'Playfair Display',serif;font-size:2rem;font-weight:700;color:var(--white);margin-bottom:6px;}
+.brand span{color:var(--gold);font-style:italic;}
+.tagline{font-family:'DM Mono',monospace;font-size:0.62rem;color:rgba(245,208,128,0.65);letter-spacing:3px;text-transform:uppercase;margin-bottom:8px;}
+.tool-badge{display:inline-block;background:rgba(26,138,106,0.2);border:1px solid rgba(26,138,106,0.4);color:var(--teal2);font-family:'DM Mono',monospace;font-size:0.6rem;padding:4px 14px;border-radius:20px;letter-spacing:1px;}
+.card{background:var(--white);border-radius:12px;box-shadow:0 8px 32px rgba(10,22,40,0.2);margin-bottom:20px;overflow:hidden;}
+.card-head{background:var(--navy);padding:14px 24px;display:flex;align-items:center;gap:10px;}
+.card-head .dot{width:8px;height:8px;border-radius:50%;background:var(--gold);}
+.card-head h2{font-family:'Playfair Display',serif;font-size:1rem;color:var(--goldlt);font-weight:400;flex:1;}
+.card-head .step{font-family:'DM Mono',monospace;font-size:0.55rem;color:rgba(245,208,128,0.7);letter-spacing:2px;}
+.card-body{padding:24px;}
+.fg{display:flex;flex-direction:column;gap:5px;margin-bottom:14px;}
+.flabel{font-size:0.68rem;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--gray);}
+select.fi,input.fi,textarea.fi{width:100%;border:2px solid #E5E7EB;border-radius:8px;padding:10px 13px;font-family:'Inter',sans-serif;font-size:0.85rem;color:var(--navy);outline:none;transition:border-color 0.2s;}
+select.fi:focus,input.fi:focus,textarea.fi:focus{border-color:var(--gold);}
+textarea.fi{min-height:130px;resize:vertical;}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+@media(max-width:600px){.grid-2{grid-template-columns:1fr;}}
+
+/* NICHE SELECTOR */
+.niche-tabs{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;}
+.niche-tab{padding:7px 14px;border-radius:20px;border:2px solid #E5E7EB;background:var(--white);cursor:pointer;font-size:0.75rem;font-weight:500;transition:all 0.15s;display:flex;align-items:center;gap:5px;}
+.niche-tab:hover{border-color:var(--gold);background:var(--goldpale);}
+.niche-tab.active{border-color:var(--gold);background:var(--goldpale);color:var(--navy);font-weight:600;}
+
+/* AI TOOL OPTIONS */
+.ai-tool-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;margin-bottom:14px;}
+.ai-tool-card{border:2px solid #E5E7EB;border-radius:8px;padding:10px;text-align:center;cursor:pointer;transition:all 0.15s;}
+.ai-tool-card:hover{border-color:var(--teal);background:#F0FDF8;}
+.ai-tool-card.active{border-color:var(--teal);background:#F0FDF8;}
+.ai-tool-card .ai-icon{font-size:1.4rem;margin-bottom:4px;}
+.ai-tool-card .ai-name{font-size:0.7rem;font-weight:600;color:var(--navy);}
+.ai-tool-card.no-ai{border-style:dashed;}
+
+/* GENERATE BUTTON */
+.gen-btn{width:100%;background:linear-gradient(135deg,var(--gold),#C88010);color:var(--white);border:none;border-radius:10px;padding:16px 24px;font-family:'Playfair Display',serif;font-size:1.1rem;font-style:italic;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;box-shadow:0 4px 16px rgba(232,160,32,0.3);transition:all 0.2s;margin-bottom:20px;}
+.gen-btn:hover:not(:disabled){transform:translateY(-1px);}
+.gen-btn:disabled{opacity:0.5;cursor:not-allowed;transform:none;}
+.spinner{width:18px;height:18px;border:2px solid rgba(255,255,255,0.3);border-top-color:white;border-radius:50%;animation:spin 0.8s linear infinite;display:none;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.progress-wrap{background:#E5E7EB;border-radius:4px;height:5px;margin-bottom:8px;overflow:hidden;}
+.progress-bar{height:100%;background:linear-gradient(90deg,var(--gold),var(--teal));border-radius:4px;width:0%;transition:width 0.4s;}
+.progress-label{font-family:'DM Mono',monospace;font-size:0.68rem;color:var(--gray);text-align:center;margin-bottom:16px;}
+.log-box{background:var(--navy);border-radius:8px;padding:14px;height:160px;overflow-y:auto;font-family:'DM Mono',monospace;font-size:0.65rem;color:var(--goldlt);line-height:1.8;}
+
+/* RESULTS */
+.results-section{display:none;}
+.success-banner{background:linear-gradient(135deg,var(--teal),var(--teal2));border-radius:10px;padding:20px 24px;text-align:center;color:white;margin-bottom:16px;}
+.success-banner .big{font-size:2rem;margin-bottom:6px;}
+.success-banner h3{font-family:'Playfair Display',serif;font-size:1.1rem;margin-bottom:4px;}
+.success-banner p{font-size:0.8rem;opacity:0.85;}
+.dl-row{display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;}
+.dl-btn{flex:1;min-width:160px;padding:12px 16px;border-radius:8px;border:none;font-family:'DM Mono',monospace;font-size:0.72rem;cursor:pointer;transition:all 0.15s;display:flex;align-items:center;justify-content:center;gap:7px;}
+.dl-csv{background:var(--navy);color:var(--goldlt);}
+.dl-txt{background:var(--teal);color:white;}
+.dl-inject{background:var(--navy2);color:var(--goldlt);border:1px solid rgba(232,160,32,0.3);}
+.reset-btn{background:#F3F4F6;color:var(--gray);border:none;border-radius:8px;padding:12px 16px;font-family:'DM Mono',monospace;font-size:0.72rem;cursor:pointer;}
+.prompt-item{border:1px solid #E5E7EB;border-radius:8px;margin-bottom:10px;overflow:hidden;}
+.prompt-header{background:var(--navy);padding:10px 16px;display:flex;align-items:center;gap:10px;}
+.prompt-num{font-family:'DM Mono',monospace;font-size:0.62rem;color:var(--goldlt);background:rgba(232,160,32,0.2);padding:2px 8px;border-radius:3px;}
+.prompt-title{font-family:'DM Mono',monospace;font-size:0.72rem;color:var(--goldlt);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.copy-btn{background:rgba(232,160,32,0.2);border:1px solid rgba(232,160,32,0.3);color:var(--goldlt);padding:4px 10px;border-radius:4px;font-family:'DM Mono',monospace;font-size:0.6rem;cursor:pointer;}
+.copy-btn.copied{background:rgba(26,138,106,0.3);border-color:var(--teal);}
+.prompt-body{padding:14px;font-family:'DM Mono',monospace;font-size:0.68rem;color:var(--navy);line-height:1.7;white-space:pre-wrap;word-break:break-word;}
+
+/* INJECT PANEL */
+.inject-panel{background:linear-gradient(135deg,var(--navy),var(--navy2));border-radius:10px;padding:20px 24px;margin-bottom:16px;}
+.inject-panel h4{font-family:'DM Mono',monospace;font-size:0.62rem;color:var(--teal2);text-transform:uppercase;letter-spacing:2px;margin-bottom:8px;}
+.inject-panel p{font-size:0.78rem;color:rgba(245,208,128,0.65);margin-bottom:14px;line-height:1.6;}
+.inject-file-label{display:flex;align-items:center;gap:8px;background:rgba(232,160,32,0.12);border:1px solid rgba(232,160,32,0.3);color:var(--goldlt);padding:10px 16px;border-radius:8px;font-family:'DM Mono',monospace;font-size:0.68rem;cursor:pointer;transition:all 0.2s;margin-bottom:10px;}
+.inject-file-label.loaded{background:rgba(26,138,106,0.2);border-color:rgba(26,138,106,0.4);}
+.inject-status{font-family:'DM Mono',monospace;font-size:0.65rem;color:rgba(245,208,128,0.65);}
+.footer{text-align:center;margin-top:32px;font-family:'DM Mono',monospace;font-size:0.58rem;color:rgba(245,208,128,0.55);letter-spacing:2px;}
+
+/* ── API KEY PANEL ──────────────────────────────────────────── */
+.api-key-banner {
+  background: linear-gradient(135deg, var(--navy), var(--navy2));
+  border: 1px solid rgba(232,160,32,0.3);
+  border-radius: 10px;
+  padding: 18px 22px;
+  margin-bottom: 20px;
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+}
+.api-key-banner.set {
+  border-color: rgba(26,138,106,0.4);
+  background: linear-gradient(135deg, #0A1628, #0A2018);
+}
+.api-key-icon { font-size: 1.6rem; flex-shrink: 0; }
+.api-key-info { flex: 1; }
+.api-key-info h4 {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.65rem; color: var(--goldlt);
+  text-transform: uppercase; letter-spacing: 1.5px;
+  margin-bottom: 4px;
+}
+.api-key-info p {
+  font-size: 0.75rem; color: var(--mid); line-height: 1.5;
+}
+.api-key-info p a { color: var(--teal2); text-decoration: none; }
+.api-key-input-row {
+  display: flex; gap: 8px; align-items: center;
+  margin-top: 10px; flex-wrap: wrap;
+}
+.api-key-input {
+  flex: 1; min-width: 200px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 7px;
+  padding: 9px 13px;
+  font-family: 'DM Mono', monospace;
+  font-size: 0.72rem; color: var(--goldlt);
+  outline: none; letter-spacing: 1px;
+  transition: border-color 0.2s;
+}
+.api-key-input:focus { border-color: rgba(232,160,32,0.5); }
+.api-key-input::placeholder { color: rgba(255,255,255,0.2); letter-spacing: 0; }
+.api-key-save {
+  background: var(--gold);
+  color: var(--navy);
+  border: none; border-radius: 7px;
+  padding: 9px 18px;
+  font-family: 'DM Mono', monospace;
+  font-size: 0.7rem; font-weight: 700;
+  cursor: pointer; white-space: nowrap;
+  transition: all 0.15s;
+}
+.api-key-save:hover { background: var(--goldlt); }
+.api-key-clear {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.1);
+  color: var(--mid); border-radius: 7px;
+  padding: 9px 14px;
+  font-family: 'DM Mono', monospace; font-size: 0.68rem;
+  cursor: pointer; transition: all 0.15s;
+}
+.api-key-clear:hover { border-color: var(--red); color: var(--red); }
+.api-key-status {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.65rem; margin-top: 8px;
+}
+.api-key-status.ok { color: var(--teal2); }
+.api-key-status.err { color: var(--red); }
+
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div class="brand">Digital<span>Forge</span> Pro</div>
+    <div class="tagline">From idea to income — automated</div>
+    <div class="tool-badge">✨ Prompt Generator — v1.0</div>
+  </div>
+
+  <!-- API KEY PANEL -->
+  <div class="card" id="apiKeyCard">
+    <div class="card-head"><div class="dot"></div><h2>Claude API Key</h2><span class="step">REQUIRED</span></div>
+    <div class="card-body">
+      <div class="api-key-banner" id="apiKeyBanner" style="margin-bottom:0;border-radius:8px">
+        <div class="api-key-icon" id="apiKeyIcon">🔑</div>
+        <div class="api-key-info">
+          <h4 id="apiKeyTitle">Claude API Key Required</h4>
+          <p id="apiKeyDesc">DigitalForge Pro uses Claude AI to generate your prompts. Get a free API key from Anthropic — takes 2 minutes. Typical cost: ~$0.001 per generation. Save your key once here and it stays for all future sessions of this tool. <a href="https://console.anthropic.com" target="_blank">console.anthropic.com →</a></p>
+          <div class="api-key-input-row">
+            <input class="api-key-input" id="apiKeyInput" type="password" placeholder="sk-ant-api03-...  paste your Claude API key here">
+            <button class="api-key-save" onclick="saveApiKey()">Save Key</button>
+            <button class="api-key-clear" onclick="clearApiKey()" id="apiKeyClearBtn" style="display:none">✕ Clear</button>
+          </div>
+          <div class="api-key-status" id="apiKeyStatus"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP 1: NICHE -->
+  <div class="card">
+    <div class="card-head"><div class="dot"></div><h2>Select Your Niche</h2><span class="step">STEP 01</span></div>
+    <div class="card-body">
+      <div class="niche-tabs" id="nicheTabs"></div>
+      <div class="grid-2">
+        <div class="fg">
+          <label class="flabel">Output Format</label>
+          <select class="fi" id="outputFormat">
+            <option>AI image generation prompt</option>
+            <option>Canva design brief</option>
+            <option>Product description only (no AI image)</option>
+            <option>SVG design concept</option>
+            <option>Photography shot list</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label class="flabel">AI Image Tool</label>
+          <select class="fi" id="aiTool">
+            <option value="Midjourney">Midjourney</option>
+            <option value="Nano Banana Pro">Nano Banana Pro</option>
+            <option value="Adobe Firefly">Adobe Firefly</option>
+            <option value="DALL-E">DALL-E</option>
+            <option value="Stable Diffusion">Stable Diffusion</option>
+            <option value="Leonardo.ai">Leonardo.ai</option>
+            <option value="Ideogram">Ideogram</option>
+            <option value="Recraft">Recraft</option>
+            <option value="N/A - no AI images">N/A — no AI images needed</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP 2: DESCRIBE -->
+  <div class="card">
+    <div class="card-head"><div class="dot"></div><h2>Describe Your Series or Collection</h2><span class="step">STEP 02</span></div>
+    <div class="card-body">
+      <div class="fg">
+        <label class="flabel">Collection / Series Name</label>
+        <input class="fi" type="text" id="seriesName" placeholder="e.g. Summer Botanicals, Christmas SVG Bundle, Wedding Planner Suite...">
+      </div>
+      <div class="fg">
+        <label class="flabel">Describe Your Vision</label>
+        <textarea class="fi" id="seriesDesc" placeholder="Describe your collection in detail. Include: theme, mood, style, subjects, colors, what makes it unique, who it is for, any elements to include or avoid, inspiration sources, etc.
+
+Example for art prints: A series of fine art watercolor botanical illustrations of native Georgia wildflowers. Each print should feature a single plant as the star subject on a clean white background. Museum quality illustration style. No people or animals — plants only. Target buyer is nature-loving home decor shoppers.
+
+Example for SVG files: A bundle of farmhouse-style kitchen SVG cut files for Cricut. Words and phrases for kitchen towels and signs — funny quotes about cooking, coffee, and baking. Clean bold fonts, simple single-layer designs. Target buyer is Cricut crafters who sell at farmers markets."></textarea>
+      </div>
+      <div class="grid-2">
+        <div class="fg">
+          <label class="flabel">Art Style or Product Style</label>
+          <select class="fi" id="artStyle" style="min-height:42px"></select>
+        </div>
+        <div class="fg">
+          <label class="flabel">Orientation / Format</label>
+          <select class="fi" id="orientation">
+            <option value="portrait --ar 3:4">Portrait 3:4</option>
+            <option value="landscape --ar 4:3">Landscape 4:3</option>
+            <option value="square --ar 1:1">Square 1:1</option>
+            <option value="standard US letter">US Letter 8.5x11</option>
+            <option value="scalable vector">Scalable Vector (SVG)</option>
+            <option value="social media square">Social Media Square</option>
+            <option value="not applicable">Not Applicable</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label class="flabel">Number of Prompts</label>
+          <select class="fi" id="numPrompts">
+            <option value="10">10</option>
+            <option value="15">15</option>
+            <option value="20" selected>20</option>
+            <option value="30">30</option>
+            <option value="40">40</option>
+            <option value="50">50</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label class="flabel">Price Per Product</label>
+          <select class="fi" id="price">
+            <option>$1.99</option><option>$2.99</option><option>$3.99</option>
+            <option selected>$4.99</option><option>$5.99</option><option>$7.99</option>
+            <option>$9.99</option><option>$12.99</option><option>$19.99</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- GENERATE -->
+  <button class="gen-btn" id="genBtn" onclick="generate()">
+    <div class="spinner" id="spinner"></div>
+    <span id="genBtnText">✨ Generate 20 Prompts</span>
+  </button>
+
+  <!-- PROGRESS -->
+  <div class="card" id="progressCard" style="display:none">
+    <div class="card-head"><div class="dot"></div><h2>Generating Prompts...</h2></div>
+    <div class="card-body">
+      <div class="progress-label" id="progressLabel">Starting...</div>
+      <div class="progress-wrap"><div class="progress-bar" id="progressBar"></div></div>
+      <div class="log-box" id="logBox"></div>
+    </div>
+  </div>
+
+  <!-- RESULTS -->
+  <div class="results-section" id="resultsSection">
+    <div class="success-banner">
+      <div class="big">🎉</div>
+      <h3 id="successTitle">30 Prompts Generated!</h3>
+      <p id="successSub">Ready to download</p>
+    </div>
+
+    <div class="dl-row">
+      <button class="dl-btn dl-csv" onclick="downloadCSV()">📥 CSV for Prompt Player</button>
+      <button class="dl-btn dl-txt" onclick="downloadTXT()">📋 Text File</button>
+      <button class="reset-btn" onclick="resetAll()">🔄 New Collection</button>
+    </div>
+
+    <!-- INJECT INTO LISTING GENERATOR -->
+    <div class="inject-panel">
+      <h4>⚡ Auto-Add to Listing Generator</h4>
+      <p>Load your DigitalForge Pro Listing Generator file to automatically inject this collection as a new tab.</p>
+      <label class="inject-file-label" id="injectLabel">
+        <input type="file" id="injectFile" accept=".html" style="display:none" onchange="injectFileLoaded(this)">
+        📂 Load Listing Generator HTML
+      </label>
+      <div class="inject-status" id="injectStatus"></div>
+      <button class="dl-btn dl-inject" id="injectBtn" onclick="injectIntoGenerator()" disabled style="opacity:0.4;cursor:not-allowed;margin-top:10px">
+        ✨ Add Collection to Generator
+      </button>
+    </div>
+
+    <div id="promptList"></div>
+  </div>
+
+  <div class="footer">DIGITALFORGE PRO v1.0 &middot; PROMPT GENERATOR &middot; DIGITALFORGEPRO.AI</div>
+</div>
+
+<script>
+// ── NICHE DATA ───────────────────────────────────────────────────
+const NICHES = {
+  art_prints:  { label:'Art Prints', icon:'🎨', styles:['Watercolor illustration','Digital painting','Botanical illustration','Photography','Abstract art','Vintage / retro','Line art','Minimalist'], promptBase:'detailed AI image generation prompt for creating a {style} digital art print' },
+  svg_cut:     { label:'SVG Cut Files', icon:'✂️', styles:['Cricut design','Silhouette design','Layered SVG','Single layer SVG','Monogram','Bundle pack'], promptBase:'SVG cut file design concept for {style}' },
+  planners:    { label:'Planners', icon:'📋', styles:['Daily planner','Weekly planner','Monthly planner','Budget tracker','Habit tracker','Journal pages'], promptBase:'printable planner page design concept for {style}' },
+  canva:       { label:'Canva Templates', icon:'🖼️', styles:['Social media post','Instagram story','Pinterest pin','Facebook cover','Business card','Presentation'], promptBase:'Canva template design brief for {style}' },
+  clipart:     { label:'Clipart', icon:'🖌️', styles:['Watercolor clipart','Digital clipart','Character clipart','Pattern clipart','Holiday clipart','Nature clipart'], promptBase:'detailed AI image prompt for creating {style} clipart PNG with transparent background' },
+  invitations: { label:'Invitations', icon:'💌', styles:['Wedding invitation','Baby shower invite','Birthday invite','Party invitation','Thank you card','Save the date'], promptBase:'printable invitation design concept for {style}' },
+  worksheets:  { label:'Worksheets', icon:'📚', styles:['Classroom worksheet','Homeschool printable','Activity sheet','Coloring page','Flash cards','Teacher resource'], promptBase:'printable educational worksheet design concept for {style}' },
+  fonts:       { label:'Fonts', icon:'🔤', styles:['Script font','Sans serif font','Display font','Handwritten font','Monogram font','Font bundle'], promptBase:'font design concept and character set description for {style}' },
+  presets:     { label:'Photography Presets', icon:'📷', styles:['Lightroom preset','Photoshop action','Mobile preset','Film preset','Moody preset','Bright and airy'], promptBase:'photography preset mood board and style description for {style}' },
+  quotes:       { label:'Printable Wall Quotes', icon:'💬', styles:['Minimalist typography','Boho script','Modern bold','Watercolor with text','Farmhouse style','Motivational poster','Kids room quotes','Nursery quotes'], promptBase:'printable wall quote design concept using {style} — suggest quote text and describe typography layout composition' },
+  stickers:     { label:'Digital Stickers', icon:'✏️', styles:['GoodNotes stickers','Notability stickers','iPad journal stickers','Planner stickers PNG','Functional stickers','Decorative stickers','Washi tape stickers','Watercolor stickers'], promptBase:'detailed AI image prompt for {style} with transparent background for iPad journaling and digital planning' },
+  mockups:      { label:'Mockup Templates', icon:'🗂️', styles:['Flat lay mockup','Frame mockup','Device mockup','Tshirt mockup','Mug mockup','Tote bag mockup','Wall art mockup','Product scene mockup'], promptBase:'product mockup scene design concept for {style} — describe scene props lighting and step by step Canva or Photoshop creation' },
+};
+
+var selectedNiche = 'art_prints';
+var generatedPrompts = [];
+var seriesNameVal = '';
+var blgContent = null;
+
+// ── INIT ─────────────────────────────────────────────────────────
+function init() {
+  var tabs = document.getElementById('nicheTabs');
+  Object.entries(NICHES).forEach(function(e) {
+    var key = e[0], niche = e[1];
+    var tab = document.createElement('button');
+    tab.className = 'niche-tab' + (key === selectedNiche ? ' active' : '');
+    tab.innerHTML = niche.icon + ' ' + niche.label;
+    tab.onclick = function(){ selectNiche(key); };
+    tab.id = 'ntab-' + key;
+    tabs.appendChild(tab);
+  });
+  updateStyleOptions();
+  updateBtnText();
+}
+
+function selectNiche(key) {
+  selectedNiche = key;
+  document.querySelectorAll('.niche-tab').forEach(function(t){ t.classList.remove('active'); });
+  document.getElementById('ntab-' + key).classList.add('active');
+  updateStyleOptions();
+}
+
+function updateStyleOptions() {
+  var sel = document.getElementById('artStyle');
+  sel.innerHTML = NICHES[selectedNiche].styles.map(function(s){ return '<option>' + s + '</option>'; }).join('');
+}
+
+function updateBtnText() {
+  var n = document.getElementById('numPrompts').value;
+  document.getElementById('genBtnText').textContent = '✨ Generate ' + n + ' Prompts';
+}
+document.getElementById('numPrompts').addEventListener('change', updateBtnText);
+
+// ── GENERATE ─────────────────────────────────────────────────────
+async function generate() {
+  if (!getApiKey()) return;
+  var name    = document.getElementById('seriesName').value.trim();
+  var desc    = document.getElementById('seriesDesc').value.trim();
+  var style   = document.getElementById('artStyle').value;
+  var orient  = document.getElementById('orientation').value;
+  var num     = parseInt(document.getElementById('numPrompts').value);
+  var price   = document.getElementById('price').value;
+  var aiTool  = document.getElementById('aiTool').value;
+  var outFmt  = document.getElementById('outputFormat').value;
+  var niche   = NICHES[selectedNiche];
+
+  if (!name) { alert('Please enter a collection name.'); return; }
+  if (!desc)  { alert('Please describe your collection.'); return; }
+
+  seriesNameVal = name;
+  generatedPrompts = [];
+
+  document.getElementById('genBtn').disabled = true;
+  document.getElementById('spinner').style.display = 'block';
+  document.getElementById('genBtnText').textContent = 'Generating...';
+  document.getElementById('progressCard').style.display = 'block';
+  document.getElementById('resultsSection').style.display = 'none';
+  document.getElementById('promptList').innerHTML = '';
+  document.getElementById('logBox').innerHTML = '';
+  document.getElementById('progressBar').style.width = '0%';
+  document.getElementById('progressLabel').textContent = 'Calling Claude API...';
+
+  var log = function(msg) {
+    var box = document.getElementById('logBox');
+    box.innerHTML += '<div>' + msg + '</div>';
+    box.scrollTop = box.scrollHeight;
+  };
+
+  log('Niche: ' + niche.label);
+
+// ── MODEL PRIORITY (auto-fallback if newer models deprecate) ───────
+// Newest first. If a model returns 'not_found_error', tries next in list.
+var MODEL_PRIORITY = ['claude-opus-4-8', 'claude-opus-4-7', 'claude-sonnet-4-6', 'claude-sonnet-4-5', 'claude-haiku-4-5-20251001'];
+var LAST_WORKING_MODEL = localStorage.getItem('dfp_last_working_model') || MODEL_PRIORITY[0];
+
+// Call Claude API with automatic fallback to older models if needed
+async function callClaudeAPI(payload, maxTokens) {
+  var modelIndex = MODEL_PRIORITY.indexOf(LAST_WORKING_MODEL);
+  if (modelIndex === -1) modelIndex = 0;
+  
+  // Try models starting from last working one
+  for (var i = 0; i < MODEL_PRIORITY.length; i++) {
+    var modelToTry = MODEL_PRIORITY[(modelIndex + i) % MODEL_PRIORITY.length];
+    try {
+      var resp = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-api-key': DFP_API_KEY, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+        body: JSON.stringify({
+          model: modelToTry,
+          max_tokens: maxTokens || 4096,
+          messages: [{ role: 'user', content: payload }]
+        })
+      });
+      var data = await resp.json();
+      
+      // If model not found, try next
+      if (data.error && data.error.type === 'not_found_error') {
+        console.warn('Model ' + modelToTry + ' not found, trying next...');
+        continue;
+      }
+      
+      // Any other error, throw it
+      if (data.error) throw new Error(data.error.message);
+      
+      // Success! Save this model for next time
+      LAST_WORKING_MODEL = modelToTry;
+      localStorage.setItem('dfp_last_working_model', modelToTry);
+      console.log('Using model: ' + modelToTry);
+      return data;
+    } catch (err) {
+      console.error('Error with model ' + modelToTry + ':', err.message);
+      if (i === MODEL_PRIORITY.length - 1) throw err; // Last model, re-throw
+    }
+  }
+  throw new Error('All Claude models failed. Please check your API key.');
+}
+  log('Style: ' + style);
+  log('Output format: ' + outFmt);
+  log('AI tool: ' + aiTool);
+  log('Requesting ' + num + ' prompts...');
+
+  var promptBase = niche.promptBase.replace('{style}', style);
+  var noAI = aiTool.includes('N/A') || aiTool.includes('no AI');
+
+  var systemPrompt = [
+    'You are an expert prompt engineer and digital product creator.',
+    'Generate exactly ' + num + ' unique, detailed ' + outFmt + ' prompts for this digital product collection.',
+    '',
+    'COLLECTION: ' + name,
+    'NICHE: ' + niche.label,
+    'STYLE: ' + style,
+    'DESCRIPTION: ' + desc,
+    'AI TOOL TARGET: ' + aiTool,
+    'FORMAT: ' + orient,
+    'PRICE: ' + price,
+    '',
+    noAI
+      ? 'These are design briefs or concept descriptions, not AI image prompts. Each should describe the design clearly enough for a human designer or Canva template creator to execute.'
+      : 'These are ' + outFmt + ' prompts for use in ' + aiTool + '. Each prompt should be detailed, evocative, and technically formatted for that tool. Include style parameters, mood, colors, composition, and quality suffixes appropriate for ' + aiTool + '.',
+    '',
+    'REQUIREMENTS:',
+    '- Generate exactly ' + num + ' prompts numbered 1 to ' + num,
+    '- Each must be unique and cover a different specific subject within the collection theme',
+    '- Vary mood, composition, color palette, and subject across all prompts',
+    '- Make prompt 1 your strongest hero concept and the last prompt another strong hero',
+    '- Give each a short descriptive title (3-6 words)',
+    '- Include a one-sentence selling angle for each',
+    '',
+    'RESPOND WITH VALID JSON ONLY. No markdown, no backticks, no text before or after.',
+    'CRITICAL: straight double quotes only, escape apostrophes, no smart quotes.',
+    'JSON structure: { "series_name": "' + name + '", "niche": "' + niche.label + '", "prompts": [ { "number": 1, "title": "Short Title", "prompt": "full prompt text", "selling_angle": "one sentence" } ] }',
+  ].join('\n');
+
+  try {
+    var data = await callClaudeAPI(systemPrompt, 8000);
+
+    var raw = data.content[0].text;
+    log('Response received — parsing...');
+    document.getElementById('progressBar').style.width = '50%';
+
+    var s = raw.indexOf('{');
+    if (s === -1) throw new Error('No JSON object found. Got: ' + raw.slice(0, 200));
+    var e = raw.lastIndexOf('}');
+
+    // If response was truncated (no closing }, or unbalanced braces), try to auto-complete it
+    var jsonStr;
+    if (e === -1 || e < s) {
+      jsonStr = autoCompleteJSON(raw.slice(s));
+    } else {
+      jsonStr = raw.slice(s, e + 1);
+      if (!isBalanced(jsonStr)) {
+        jsonStr = autoCompleteJSON(raw.slice(s));
+      }
+    }
+
+    // Clean common JSON-breaking characters
+    jsonStr = jsonStr
+      .replace(/[\u2018\u2019]/g, "'")
+      .replace(/[\u201C\u201D]/g, '"')
+      .replace(/[\u2013\u2014]/g, '-')
+      .replace(/[\u2026]/g, '...');
+
+    var parsed;
+    try {
+      parsed = JSON.parse(jsonStr);
+    } catch (parseErr) {
+      // Three-tier sanitizer for invalid JSON escape sequences.
+      // JSON only allows: \" \\ \/ \b \f \n \r \t \uXXXX
+      // Anything else (\' \$ \( etc.) throws "Bad escaped character".
+      var fixed = jsonStr
+        .replace(/\\([^"\\\/bfnrtu])/g, '$1')
+        .replace(/\\u(?![0-9a-fA-F]{4})/g, 'u')
+        .replace(/\t/g, ' ')
+        .replace(/\r/g, '')
+        .replace(/,(\s*[}\]])/g, '$1');
+      try {
+        parsed = JSON.parse(fixed);
+      } catch (e2) {
+        // Last resort: strip any remaining stray backslashes
+        var stripped = fixed.replace(/\\(?!["\\\/bfnrt]|u[0-9a-fA-F]{4})/g, '');
+        parsed = JSON.parse(stripped);
+      }
+    }
+
+    generatedPrompts = parsed.prompts || [];
+    log('\u2713 ' + generatedPrompts.length + ' prompts parsed');
+    document.getElementById('progressBar').style.width = '100%';
+    document.getElementById('progressLabel').textContent = generatedPrompts.length + ' prompts ready!';
+
+    document.getElementById('successTitle').textContent = generatedPrompts.length + ' Prompts Generated!';
+    document.getElementById('successSub').textContent = name + ' \u2014 ' + niche.label + ' \u2014 Ready to download';
+
+    var list = document.getElementById('promptList');
+    list.innerHTML = '';
+    generatedPrompts.forEach(function(p, i) {
+      list.innerHTML += '<div class="prompt-item">' +
+        '<div class="prompt-header">' +
+        '<span class="prompt-num">#' + (p.number||i+1) + '</span>' +
+        '<span class="prompt-title">' + escHtml(p.title||'') + '</span>' +
+        '<button class="copy-btn" onclick="copyPrompt(' + i + ',this)">📋 Copy</button>' +
+        '</div>' +
+        '<div class="prompt-body">' + escHtml(p.prompt||'') + (p.selling_angle ? '\n\n\uD83D\uDCA1 ' + escHtml(p.selling_angle) : '') + '</div>' +
+        '</div>';
+    });
+    document.getElementById('resultsSection').style.display = 'block';
+  } catch(err) {
+    log('\u2717 Error: ' + err.message);
+    alert('Generation failed: ' + err.message);
+  } finally {
+    document.getElementById('genBtn').disabled = false;
+    document.getElementById('spinner').style.display = 'none';
+    document.getElementById('genBtnText').textContent = '\u2728 Generate ' + num + ' Prompts';
+  }
+}
+
+function copyPrompt(idx, btn) {
+  navigator.clipboard.writeText(generatedPrompts[idx].prompt || '').then(function() {
+    btn.textContent = '\u2713 Copied!'; btn.classList.add('copied');
+    setTimeout(function(){ btn.textContent = '\uD83D\uDCCB Copy'; btn.classList.remove('copied'); }, 2000);
+  });
+}
+
+// ── DOWNLOADS ────────────────────────────────────────────────────
+function downloadCSV() {
+  if (!generatedPrompts.length) return;
+  var niche = NICHES[selectedNiche];
+  var rows = [['Number','Title','Prompt','Selling Angle','Series Name','Niche','AI Tool']];
+  generatedPrompts.forEach(function(p) {
+    rows.push([p.number||'', p.title||'', p.prompt||'', p.selling_angle||'', seriesNameVal, niche.label, document.getElementById('aiTool').value]);
+  });
+  var csv = rows.map(function(r){ return r.map(function(c){ return '"' + String(c).replace(/"/g,'""') + '"'; }).join(','); }).join('\n');
+  var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a'); a.href = url;
+  a.download = 'DFP_' + seriesNameVal.replace(/\s+/g,'_') + '_Prompts.csv';
+  a.click(); URL.revokeObjectURL(url);
+}
+
+function downloadTXT() {
+  if (!generatedPrompts.length) return;
+  var txt = 'DigitalForge Pro \u2014 ' + seriesNameVal + '\n' + '='.repeat(60) + '\n\n';
+  generatedPrompts.forEach(function(p) {
+    txt += 'PROMPT ' + (p.number||'') + ' \u2014 ' + (p.title||'') + '\n' + '-'.repeat(50) + '\n' + (p.prompt||'') + '\n\n\uD83D\uDCA1 ' + (p.selling_angle||'') + '\n\n\n';
+  });
+  var blob = new Blob([txt], { type: 'text/plain;charset=utf-8;' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a'); a.href = url;
+  a.download = 'DFP_' + seriesNameVal.replace(/\s+/g,'_') + '_Prompts.txt';
+  a.click(); URL.revokeObjectURL(url);
+}
+
+// ── INJECT INTO LISTING GENERATOR ───────────────────────────────
+function injectFileLoaded(input) {
+  var file = input.files[0];
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    blgContent = e.target.result;
+    var tabs = blgContent.match(/id="btn-c(\d+)"/g) || [];
+    document.getElementById('injectStatus').textContent = '\u2713 Loaded: ' + file.name + ' | ' + tabs.length + ' existing collections';
+    document.getElementById('injectBtn').disabled = false;
+    document.getElementById('injectBtn').style.opacity = '1';
+    document.getElementById('injectBtn').style.cursor = 'pointer';
+    document.getElementById('injectLabel').classList.add('loaded');
+  };
+  reader.readAsText(file);
+}
+
+function injectIntoGenerator() {
+  if (!blgContent || !generatedPrompts.length) { alert('Please load the Listing Generator and generate prompts first.'); return; }
+
+  var niche   = NICHES[selectedNiche];
+  var price   = document.getElementById('price').value;
+  var name    = seriesNameVal;
+
+  // Find next collection ID by looking at collCounter value
+  var counterMatch = blgContent.match(/var collCounter = (\d+)/);
+  var nextNum = counterMatch ? parseInt(counterMatch[1]) + 1 : 1;
+  var cid = 'c' + nextNum;
+
+  // Build products JSON
+  var prods = generatedPrompts.map(function(p) {
+    var safeName = (p.title || 'Product').replace(/'/g,'').replace(/"/g,'');
+    return "{name:'" + safeName + "',occ:'" + (niche.label.toLowerCase()) + "',price:'" + price.replace('$','') + "'}";
+  }).join(',');
+
+  // 1. Update collCounter
+  blgContent = blgContent.replace('var collCounter = ' + (nextNum-1), 'var collCounter = ' + nextNum);
+
+  // 2. Add collection to collections object — inject via init by modifying the closing script
+  var injection = '\n// Auto-injected collection: ' + name + '\ncollections["' + cid + '"] = {id:"' + cid + '",name:"' + name.replace(/"/g,'') + '",niche:"' + selectedNiche + '",products:[' + prods + ']};\nresults["' + cid + '"] = [];\naddCollectionToUI("' + cid + '");\nupdateDashStats();\n';
+  blgContent = blgContent.replace('// ── BOOT ─────────', '// ── BOOT ─────────' + injection);
+
+  // Download
+  var blob = new Blob([blgContent], { type: 'text/html;charset=utf-8;' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a'); a.href = url;
+  a.download = 'DigitalForge_ListingGenerator_UPDATED.html';
+  a.click(); URL.revokeObjectURL(url);
+
+  document.getElementById('injectStatus').textContent = '\u2705 Done! Collection added. Download complete \u2014 replace your old Listing Generator with this file.';
+  document.getElementById('injectBtn').textContent = '\u2713 Downloaded!';
+  setTimeout(function(){ document.getElementById('injectBtn').textContent = '\u2728 Add Collection to Generator'; }, 3000);
+}
+
+function resetAll() {
+  generatedPrompts = [];
+  document.getElementById('seriesName').value = '';
+  document.getElementById('seriesDesc').value = '';
+  document.getElementById('progressCard').style.display = 'none';
+  document.getElementById('resultsSection').style.display = 'none';
+  document.getElementById('progressBar').style.width = '0%';
+}
+
+function escHtml(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+
+// ── API KEY MANAGEMENT ───────────────────────────────────────────
+var DFP_API_KEY = localStorage.getItem('dfp_api_key') || '';
+
+function saveApiKey() {
+  var val = document.getElementById('apiKeyInput').value.trim();
+  if (!val) { showKeyStatus('Please paste your API key first.', 'err'); return; }
+  if (!val.startsWith('sk-ant-')) {
+    showKeyStatus('That does not look like a Claude API key. It should start with sk-ant-', 'err');
+    return;
+  }
+  DFP_API_KEY = val;
+  localStorage.setItem('dfp_api_key', val);
+  document.getElementById('apiKeyInput').value = '';
+  updateKeyUI(true);
+  showKeyStatus('\u2713 API key saved. You are ready to generate!', 'ok');
+}
+
+function clearApiKey() {
+  DFP_API_KEY = '';
+  localStorage.removeItem('dfp_api_key');
+  updateKeyUI(false);
+  showKeyStatus('API key cleared.', 'err');
+}
+
+function updateKeyUI(isSet) {
+  var banner  = document.getElementById('apiKeyBanner');
+  var icon    = document.getElementById('apiKeyIcon');
+  var title   = document.getElementById('apiKeyTitle');
+  var desc    = document.getElementById('apiKeyDesc');
+  var clearBtn= document.getElementById('apiKeyClearBtn');
+  if (isSet) {
+    banner.classList.add('set');
+    icon.textContent   = '\u2713';
+    title.textContent  = 'API Key Connected';
+    desc.innerHTML     = 'Your Claude API key is saved and active in this tool. Note: each DigitalForge tool stores its own key — you\'ll save it once more when you first open the Listing Generator. <a href="https://console.anthropic.com" target="_blank">View usage at console.anthropic.com</a>';
+    clearBtn.style.display = 'inline-block';
+  } else {
+    banner.classList.remove('set');
+    icon.textContent   = '\uD83D\uDD11';
+    title.textContent  = 'Claude API Key Required';
+    desc.innerHTML     = 'DigitalForge Pro uses Claude AI to generate your content. Get a free API key from Anthropic. <a href=\"https://console.anthropic.com\" target=\"_blank\">console.anthropic.com \u2192</a>';
+    clearBtn.style.display = 'none';
+  }
+}
+
+function showKeyStatus(msg, type) {
+  var el = document.getElementById('apiKeyStatus');
+  el.textContent  = msg;
+  el.className    = 'api-key-status ' + type;
+  if (type === 'ok') setTimeout(function(){ el.textContent = ''; }, 4000);
+}
+
+function getApiKey() {
+  if (!DFP_API_KEY) {
+    alert('Please enter your Claude API key first.\n\nGet a free key at console.anthropic.com\n\nIt only takes 2 minutes and costs about $0.01 per listing.');
+    return null;
+  }
+  return DFP_API_KEY;
+}
+
+// Init key UI on load
+if (DFP_API_KEY) updateKeyUI(true);
+
+
+// ── JSON RESPONSE SANITIZATION HELPERS ───────────────────────────
+// Check if braces, brackets, and quotes are balanced in JSON
+function isBalanced(str) {
+  var depth = 0, bracket = 0, inStr = false, esc = false;
+  for (var i = 0; i < str.length; i++) {
+    var c = str[i];
+    if (esc) { esc = false; continue; }
+    if (c === '\\') { esc = true; continue; }
+    if (c === '"') { inStr = !inStr; continue; }
+    if (inStr) continue;
+    if (c === '{') depth++;
+    else if (c === '}') depth--;
+    else if (c === '[') bracket++;
+    else if (c === ']') bracket--;
+  }
+  return depth === 0 && bracket === 0 && !inStr;
+}
+
+// Repair truncated JSON by closing open strings, arrays, and objects
+function autoCompleteJSON(str) {
+  var depth = 0, bracket = 0, inStr = false, esc = false;
+  var lastSafe = 0;
+  for (var i = 0; i < str.length; i++) {
+    var c = str[i];
+    if (esc) { esc = false; continue; }
+    if (c === '\\') { esc = true; continue; }
+    if (c === '"') { inStr = !inStr; if (!inStr) lastSafe = i + 1; continue; }
+    if (inStr) continue;
+    if (c === '{') { depth++; lastSafe = i + 1; }
+    else if (c === '}') { depth--; lastSafe = i + 1; }
+    else if (c === '[') { bracket++; lastSafe = i + 1; }
+    else if (c === ']') { bracket--; lastSafe = i + 1; }
+    else if (c === ',' || /\s/.test(c)) { lastSafe = i + 1; }
+  }
+  var s = str.slice(0, lastSafe).replace(/,\s*$/, '');
+  while (bracket-- > 0) s += ']';
+  while (depth-- > 0) s += '}';
+  return s;
+}
+
+
+init();
+</script>
+</body>
+</html>

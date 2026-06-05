@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DigitalForge Pro — AI Tools for Digital Product Creators</title>
+  <meta name="description" content="DigitalForge Pro Dashboard: Generate AI prompts and Etsy listings in minutes. Batch resize images. Tools for digital sellers.">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #0C0F1A;
+      color: #B8BDD4;
+      line-height: 1.6;
+    }
+    .container { max-width: 1200px; margin: 0 auto; padding: 0 20px; }
+    header {
+      border-bottom: 1px solid #1F2438;
+      padding: 40px 0;
+      text-align: center;
+    }
+    header h1 {
+      font-size: 48px;
+      color: #FAFBFF;
+      margin-bottom: 8px;
+      font-weight: 700;
+    }
+    header p {
+      font-size: 18px;
+      color: #6B7699;
+    }
+    main {
+      padding: 80px 0;
+    }
+    .hero {
+      text-align: center;
+      margin-bottom: 80px;
+    }
+    .hero h2 {
+      font-size: 36px;
+      color: #FAFBFF;
+      margin-bottom: 24px;
+      line-height: 1.3;
+    }
+    .hero p {
+      font-size: 16px;
+      color: #B8BDD4;
+      max-width: 700px;
+      margin: 0 auto 40px;
+    }
+    .btn {
+      display: inline-block;
+      padding: 16px 32px;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.2s;
+      border: none;
+      cursor: pointer;
+    }
+    .btn-primary {
+      background: #E8921A;
+      color: #0C0F1A;
+    }
+    .btn-primary:hover {
+      background: #F5B340;
+      transform: translateY(-2px);
+    }
+    .btn-secondary {
+      background: transparent;
+      color: #E8921A;
+      border: 2px solid #E8921A;
+    }
+    .btn-secondary:hover {
+      background: #E8921A;
+      color: #0C0F1A;
+    }
+    .products {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 40px;
+      margin: 60px 0;
+    }
+    .product-card {
+      background: #1F2438;
+      border: 1px solid #2D3451;
+      border-radius: 12px;
+      padding: 32px;
+      text-align: center;
+    }
+    .product-card h3 {
+      color: #E8921A;
+      font-size: 24px;
+      margin-bottom: 12px;
+    }
+    .product-card p {
+      color: #B8BDD4;
+      font-size: 14px;
+      margin-bottom: 24px;
+    }
+    .product-card .status {
+      display: inline-block;
+      font-size: 12px;
+      padding: 6px 12px;
+      background: #1A9A78;
+      color: #FAFBFF;
+      border-radius: 4px;
+      margin-bottom: 16px;
+    }
+    .product-card .coming {
+      background: #6B7699;
+    }
+    footer {
+      border-top: 1px solid #1F2438;
+      padding: 40px 0;
+      text-align: center;
+      font-size: 14px;
+      color: #6B7699;
+    }
+    footer a { color: #E8921A; text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="container">
+    <div style="display: flex; align-items: center; gap: 16px; justify-content: center;">
+      <img src="/images/logo.png" alt="DigitalForge Pro" style="height: 60px; width: auto;">
+      <div>
+        <h1 style="margin: 0;">DigitalForge Pro</h1>
+        <p style="margin: 4px 0 0;">AI-powered tools for digital product creators</p>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="container">
+
+    <section class="hero">
+      <h2>Create More, Faster</h2>
+      <p>Generate AI prompts, Etsy listings, and batch-process images — all in one unified dashboard. Built for Etsy sellers, printable creators, and digital product businesses.</p>
+      <a href="/dashboard" class="btn btn-primary">Launch Dashboard →</a>
+    </section>
+
+    <section class="products">
+      <div class="product-card">
+        <div class="status">Available Now</div>
+        <h3>AI Dashboard</h3>
+        <p>Generate AI image prompts and Etsy-ready listings in minutes. Batch resize images. Preview everything before download.</p>
+        <a href="/dashboard" class="btn btn-secondary">Open Dashboard</a>
+      </div>
+
+      <div class="product-card">
+        <div class="status coming">Coming Q4 2026</div>
+        <h3>Desktop App</h3>
+        <p>Native Mac/Windows app. Offline support. Batch processing from your file system. Free upgrade for Dashboard users.</p>
+        <p style="font-size: 12px; margin-top: 12px;">Sign up for updates on <a href="https://gumroad.com/digitalforgepro" target="_blank" style="color:#E8921A;">Gumroad</a></p>
+      </div>
+
+    </section>
+
+  </div>
+</main>
+
+<footer>
+  <div class="container">
+    <p style="margin-top: 12px; font-size: 12px;">
+      <a href="/downloads/DigitalForge_BrandEmailSetup_Dashboard.pdf">Free: Brand Email Setup Guide</a>
+    </p>
+  </div>
+</footer>
+
+</body>
+</html>
