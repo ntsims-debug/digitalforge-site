@@ -1816,8 +1816,10 @@
                 <option value="fonts">🔤 Fonts</option>
                 <option value="presets">📷 Photography Presets</option>
                 <option value="mockups">🗂️ Mockup Templates</option>
+                <option value="surface_patterns">🧵 Surface Patterns — Spoonflower (prompts only · Midjourney)</option>
               </select>
               <span class="field-error">Please select a niche</span>
+              <div class="price-hint-bar" id="nicheNote" style="display:none;"></div>
             </div>
 
             <div class="form-group">
@@ -2372,6 +2374,20 @@
         'Bright and airy'
       ]
     },
+    surface_patterns: {
+      label: 'Surface Patterns',
+      icon: '🧵',
+      styles: [
+        'Floral repeat',
+        'Botanical / leaves',
+        'Geometric',
+        'Boho / folk',
+        'Watercolor florals',
+        'Ditsy / small-scale',
+        'Abstract / organic',
+        'Kids / novelty'
+      ]
+    },
     mockups: {
       label: 'Mockup Templates',
       icon: '🗂️',
@@ -2406,7 +2422,8 @@
     svg_cut:      'Craft Supplies & Tools|Patterns & How To|Patterns & Instructions',
     fonts:        'Art & Collectibles|Digital|Fonts',
     presets:      'Photography|Other',
-    mockups:      'Art & Collectibles|Digital'
+    mockups:      'Art & Collectibles|Digital',
+    surface_patterns: 'Craft Supplies & Tools|Patterns & How To|Patterns & Instructions'
   };
 
   /* ============================================================
@@ -2427,7 +2444,8 @@
     svg_cut:          { hint: 'SVG cut files typically sell for $2.99–$6.99 each',     default: '3.99' },
     fonts:            { hint: 'Individual fonts typically sell for $5.99–$14.99',      default: '7.99' },
     presets:          { hint: 'Lightroom preset packs typically sell for $9.99–$24.99',default: '12.99' },
-    mockups:          { hint: 'Mockup templates typically sell for $4.99–$12.99',      default: '6.99' }
+    mockups:          { hint: 'Mockup templates typically sell for $4.99–$12.99',      default: '6.99' },
+    surface_patterns: { hint: 'Seamless pattern / digital paper designs typically $3.50–$6.00', default: '4.50' }
   };
 
   /**
@@ -2542,13 +2560,26 @@ Be direct and specific. No generic advice.`;
     svg_cut:     { key: 'svg',           reason: 'Square vector format works best for SVG cut files' },
     fonts:       { key: 'not_applicable',reason: 'Fonts do not require a specific image orientation' },
     presets:     { key: 'landscape_3_2', reason: '3:2 is the standard DSLR / photography ratio' },
-    mockups:     { key: 'portrait_3_4',  reason: 'Portrait is the most common orientation for product mockups' }
+    mockups:     { key: 'portrait_3_4',  reason: 'Portrait is the most common orientation for product mockups' },
+    surface_patterns: { key: 'square_1_1', reason: 'Seamless tiles are square; Midjourney --tile is added automatically' }
   };
 
   /**
    * Update orientation dropdown when niche changes.
    * Shows a hint explaining the auto-selection.
    */
+  function updateNicheNote(niche) {
+    const note = document.getElementById('nicheNote');
+    if (!note) return;
+    if (niche === 'surface_patterns') {
+      note.innerHTML = '🧵 <strong>Prompts only.</strong> This niche writes <strong>seamless repeat-pattern</strong> prompts for fabric/Spoonflower and auto-adds Midjourney <code>--tile</code>. Use the generated prompts (with the Prompt Player) in <strong>Midjourney</strong> for true seamless tiling. The Listings and print-size steps are Etsy-oriented and don\u2019t apply to Spoonflower \u2014 just use the prompts.';
+      note.style.display = '';
+    } else {
+      note.style.display = 'none';
+      note.textContent = '';
+    }
+  }
+
   function updateOrientationForNiche(niche) {
     const select  = document.getElementById('orientationSelect');
     const hintBar = document.getElementById('orientationHintBar');
@@ -2907,6 +2938,16 @@ Be direct and specific. No generic advice.`;
       orientNote = `\n- Composition must suit ${orient.natural}`;
     }
 
+    // Surface Patterns: force seamless tiling. Midjourney has a real --tile flag;
+    // every tool also gets explicit seamless instructions in the prompt body.
+    let patternNote = '';
+    if (niche === 'surface_patterns') {
+      patternNote = '\n- Describe a SEAMLESS, edge-to-edge REPEATING surface pattern that tiles continuously with no visible seams — motifs evenly distributed across the whole square, nothing important cut off at the edges in a way that would break the repeat';
+      if (aiTool === 'midjourney') {
+        dynamicSuffix = '--ar 1:1 --tile --s 750 --v 6';
+      }
+    }
+
     const systemPrompt = `You are an expert AI image prompt writer for ${tool.label}, specializing in ${nicheLabel} for Etsy digital product sellers.
 ${tool.instruction}
 Return ONLY valid JSON — no markdown, no explanation, no preamble, no trailing text.`;
@@ -2927,7 +2968,7 @@ ORIENTATION: ${orientLabel}
 Each prompt must:
 - Be 40–70 words of descriptive content (not counting any suffix)
 - Be unique within the collection theme
-- Match the ${style} art style closely${orientNote}
+- Match the ${style} art style closely${orientNote}${patternNote}
 - ${suffixNote}
 
 Example format: "${tool.example}"
@@ -3854,6 +3895,7 @@ Return ONLY this JSON array, nothing else before or after:
 
       // Restore hint bars
       if (data.niche) updatePriceHint(data.niche);
+      if (data.niche) updateNicheNote(data.niche);
 
     } catch(e) { /* Silently ignore corrupt memory */ }
   }
@@ -4023,6 +4065,7 @@ Return ONLY this JSON array, nothing else before or after:
       saveFormMemory();
       updatePriceHint(niche);
       updateOrientationForNiche(niche);  // Update hint bar + default price
+      updateNicheNote(niche);            // Show "prompts only · Midjourney" note for Surface Patterns
     });
 
     document.getElementById('styleSelect').addEventListener('change', function () {
