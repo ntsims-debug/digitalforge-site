@@ -28,7 +28,7 @@
       DigitalForge_PromptGenerator.html
       DigitalForge_ListingGenerator.html
       DigitalForge_PromptPlayer.html
-      DigitalForge_ResizeTool.html
+      DigitalForge_BatchScaler.html
 
   TO UPDATE NICHES/STYLES: Edit the NICHES constant in the JS section below.
   TO UPDATE CSV FIELDS: Edit the generateCSV() function and CATEGORY_MAP.
@@ -1793,7 +1793,7 @@
 
         <div class="section-label">Step 1 of 4</div>
         <h1 class="section-title">Tell us about your collection</h1>
-        <p class="section-desc">Fill in the details below and we'll generate everything you need — prompts, listings, and a Vela-ready CSV — in one click.</p>
+        <p class="section-desc">Fill in the details below and we'll generate everything you need — prompts, listings, and a Vela-compatible CSV — in one click.</p>
 
         <div class="card">
           <div class="card-title">Collection Details</div>
@@ -1850,7 +1850,13 @@
                 <span class="hint">Auto-selected for your niche — change if needed</span>
               </label>
               <select id="orientationSelect">
+                <option value="portrait_2_3">Portrait 2:3</option>
                 <option value="portrait_3_4">Portrait 3:4</option>
+                <option value="portrait_4_5">Portrait 4:5</option>
+                <option value="portrait_5_7">Portrait 5:7</option>
+                <option value="portrait_11_14">Portrait 11:14</option>
+                <option value="portrait_iso">ISO A-series (A4/A3/A2)</option>
+                <option value="landscape_3_2">Landscape 3:2</option>
                 <option value="landscape_4_3">Landscape 4:3</option>
                 <option value="square_1_1">Square 1:1</option>
                 <option value="us_letter">US Letter 8.5×11</option>
@@ -1923,7 +1929,7 @@
             <button class="btn btn-primary btn-lg" id="btnGenerate">
               ✨ Generate Everything
             </button>
-            <p class="generate-hint">Generates prompts + listings + Vela-ready CSV · Takes 30–90 seconds</p>
+            <p class="generate-hint">Generates prompts + listings + Vela-compatible CSV · Takes 30–90 seconds</p>
           </div>
 
         </div><!-- .card -->
@@ -1990,7 +1996,7 @@
           <!-- CSV preview tab -->
           <div class="tab-panel" id="csvTab">
             <p class="text-muted mt-sm" style="margin-bottom:16px;">
-              This is exactly what downloads — all 11 columns, Vela-compatible for Etsy bulk upload. Scroll right to see every field. Long text is truncated here for readability but exports in full.
+              This is exactly what downloads — all 11 columns, Vela-compatible. Scroll right to see every field. Long text is truncated here for readability but exports in full.
             </p>
             <div class="csv-table-wrapper">
               <table class="csv-table" id="csvPreviewTable">
@@ -2031,13 +2037,13 @@
 
         <div class="section-label">Step 4 of 4</div>
         <h1 class="section-title">Download your collection</h1>
-        <p class="section-desc">Everything is ready. Download the files below, then upload your listings CSV to Vela for bulk publishing to Etsy.</p>
+        <p class="section-desc">Everything is ready — download your files below. The listings CSV is Vela-compatible, so you can bulk-import it or use it on whatever platform you sell.</p>
 
         <div class="download-success">
           <div class="download-success-icon">✅</div>
           <div>
             <h3 id="downloadSuccessTitle">Collection ready!</h3>
-            <p id="downloadSuccessDesc">Generated 20 prompts + 20 listings · Ready for Vela upload</p>
+            <p id="downloadSuccessDesc">Generated 20 prompts + 20 listings · Vela-compatible CSV</p>
           </div>
         </div>
 
@@ -2059,7 +2065,7 @@
           <div class="download-item">
             <div class="download-item-icon">📋</div>
             <div class="download-item-title">Listings CSV</div>
-            <div class="download-item-desc">Vela-compatible. 10 fields, 13 tags per listing. Ready for bulk Etsy upload.</div>
+            <div class="download-item-desc">Vela-compatible — 10 fields, 13 tags per listing.</div>
             <button class="btn btn-secondary mt-md" id="btnDownloadListings">Download Listings CSV</button>
           </div>
 
@@ -2079,7 +2085,7 @@
             <li><span class="step-num">2</span><span>Load your <strong>Prompts CSV</strong> into the <strong>Prompt Player</strong> (in the Tools section below) — it lets you copy each prompt with one click and step through them one by one while you work in your AI image tool</span></li>
             <li><span class="step-num">3</span><span>Generate your artwork using your AI image tool (e.g. Midjourney, Firefly, DALL-E)</span></li>
             <li><span class="step-num">4</span><span>Upscale your generated images for print quality using <strong>Upscayl</strong> — free download at <a href="https://upscayl.org" target="_blank" style="color:var(--orange);">upscayl.org</a> (recommended: 4× upscale)</span></li>
-            <li><span class="step-num">5</span><span>Batch resize to your target print sizes using the <strong>Resize Tool</strong> (in the Tools section below) — choose <strong>Cover</strong> to auto-crop and fill, or <strong>Contain</strong> to fit with white padding. If you need to manually crop or adjust individual images first, we recommend <strong>Photopea</strong> (photopea.com) — free, browser-based, no install needed</span></li>
+            <li><span class="step-num">5</span><span>Batch resize to your target print sizes using the <strong>Batch Scaler</strong> (in the Tools section below) — it slices one master into every size across all supported ratios as JPG + PDF at 300 DPI, organized and zipped. Your master should already be in the ratio you want (Batch Scaler doesn't crop). To crop or adjust an image to the right ratio first, we recommend <strong>Photopea</strong> (photopea.com) — free, browser-based, no install needed</span></li>
             <li><span class="step-num">6</span><span>Create your product listings using the <strong>Listings CSV</strong> (e.g. bulk import to Etsy via Vela, or upload manually to Gumroad, Shopify, etc.)</span></li>
             <li><span class="step-num">7</span><span>Add your resized images to each listing and publish</span></li>
           </ul>
@@ -2100,7 +2106,7 @@
         <div class="advanced-toggle open" id="advancedToggle">
           <div class="advanced-toggle-left">
             <span class="advanced-toggle-title">Tools</span>
-            <span style="font-size:12px;color:var(--steel);font-weight:400;margin-left:10px;">Prompt Player · Resize Tool</span>
+            <span style="font-size:12px;color:var(--steel);font-weight:400;margin-left:10px;">Prompt Player · Batch Scaler</span>
           </div>
           <span class="advanced-toggle-arrow">⌄</span>
         </div>
@@ -2124,10 +2130,10 @@
                 <div class="tool-launcher-desc">Load your Prompts CSV and copy each prompt with one click as you generate images in your AI tool</div>
               </div>
 
-              <div class="tool-launcher" data-tool="resizetool" data-src="./tools/DigitalForge_ResizeTool.html">
+              <div class="tool-launcher" data-tool="batchscaler" data-src="./tools/DigitalForge_BatchScaler_Dashboard.html">
                 <div class="tool-launcher-icon">🖼️</div>
-                <div class="tool-launcher-name">Resize Tool</div>
-                <div class="tool-launcher-desc">Batch resize your finished images to US standard and ISO print sizes — Cover (crop) or Contain (pad)</div>
+                <div class="tool-launcher-name">Batch Scaler</div>
+                <div class="tool-launcher-desc">Slice one master into every print size — 6 ratios plus square, both orientations — as JPG + PDF at 300 DPI, organized into folders and zipped</div>
               </div>
 
             </div>
@@ -2509,7 +2515,13 @@ Be direct and specific. No generic advice.`;
      ============================================================ */
 
   const ORIENTATIONS = {
+    portrait_2_3:   { label: 'Portrait 2:3',           mj: '--ar 2:3',   natural: 'portrait orientation (2:3 aspect ratio)' },
     portrait_3_4:   { label: 'Portrait 3:4',           mj: '--ar 3:4',   natural: 'portrait orientation (3:4 aspect ratio)' },
+    portrait_4_5:   { label: 'Portrait 4:5',           mj: '--ar 4:5',   natural: 'portrait orientation (4:5 aspect ratio)' },
+    portrait_5_7:   { label: 'Portrait 5:7',           mj: '--ar 5:7',   natural: 'portrait orientation (5:7 aspect ratio)' },
+    portrait_11_14: { label: 'Portrait 11:14',         mj: '--ar 11:14', natural: 'portrait orientation (11:14 aspect ratio)' },
+    portrait_iso:   { label: 'ISO A-series (A4/A3/A2)', mj: '--ar 70:99', natural: 'portrait ISO A-series proportions (A4/A3/A2, ~1:1.41 aspect ratio)' },
+    landscape_3_2:  { label: 'Landscape 3:2',          mj: '--ar 3:2',   natural: 'landscape orientation (3:2 aspect ratio)' },
     landscape_4_3:  { label: 'Landscape 4:3',          mj: '--ar 4:3',   natural: 'landscape orientation (4:3 aspect ratio)' },
     square_1_1:     { label: 'Square 1:1',             mj: '--ar 1:1',   natural: 'square format (1:1 aspect ratio)' },
     us_letter:      { label: 'US Letter 8.5×11',       mj: '--ar 17:22', natural: 'US Letter size (8.5×11 inches, portrait)' },
@@ -2519,7 +2531,7 @@ Be direct and specific. No generic advice.`;
   };
 
   const NICHE_ORIENTATIONS = {
-    art_prints:  { key: 'portrait_3_4',  reason: 'Portrait is standard for wall art and art prints' },
+    art_prints:  { key: 'portrait_2_3',  reason: '2:3 is the most common art-print ratio (4×6 up to 24×36)' },
     quotes:      { key: 'portrait_3_4',  reason: 'Portrait works best for quote prints and wall art' },
     clipart:     { key: 'square_1_1',    reason: 'Square format is most versatile for clipart sets' },
     stickers:    { key: 'square_1_1',    reason: 'Square is standard for sticker sheets and individual stickers' },
@@ -2529,7 +2541,7 @@ Be direct and specific. No generic advice.`;
     canva:       { key: 'portrait_3_4',  reason: 'Portrait is the most common Canva template orientation' },
     svg_cut:     { key: 'svg',           reason: 'Square vector format works best for SVG cut files' },
     fonts:       { key: 'not_applicable',reason: 'Fonts do not require a specific image orientation' },
-    presets:     { key: 'landscape_4_3', reason: 'Landscape matches standard photography and preset previews' },
+    presets:     { key: 'landscape_3_2', reason: '3:2 is the standard DSLR / photography ratio' },
     mockups:     { key: 'portrait_3_4',  reason: 'Portrait is the most common orientation for product mockups' }
   };
 
@@ -3145,6 +3157,12 @@ Return ONLY this JSON array, nothing else before or after:
    * Trigger browser download of a text file.
    * Safari note: uses document.body append/remove to ensure click fires correctly.
    */
+  function dfpStamp() {
+    const p = (n) => String(n).padStart(2, '0');
+    const d = new Date();
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+  }
+
   function downloadFile(filename, content, mimeType = 'text/csv;charset=utf-8;') {
     const blob = new Blob(['\uFEFF' + content], { type: mimeType });
     const url  = URL.createObjectURL(blob);
@@ -3184,12 +3202,12 @@ Return ONLY this JSON array, nothing else before or after:
       '',
       'FILES:',
       `  ${name}_Prompts.csv   — Prompts formatted for ${tool}`,
-      `  ${name}_Listings.csv  — Upload to Vela (app.getvela.com) for bulk Etsy publishing`,
+      `  ${name}_Listings.csv  — Vela-compatible listings (bulk-import format)`,
       '',
-      'NEXT STEPS (if uploading to Etsy via Vela):',
+      'NEXT STEPS:',
       '  1. Use Prompts CSV with your AI image generator',
-      '  2. Upload Listings CSV to Vela for bulk import to Etsy',
-      '  3. Add images to each listing in Etsy and publish',
+      '  2. Import the Listings CSV into your selling platform (it matches the Vela bulk-upload template)',
+      '  3. Add your images to each listing and publish',
       '',
       'Generated by DigitalForge Pro AI Dashboard — digitalforgepro.ai'
     ].join('\n'));
@@ -3198,7 +3216,7 @@ Return ONLY this JSON array, nothing else before or after:
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
     a.href     = url;
-    a.download = `${name}_DigitalForgePro.zip`;
+    a.download = `${name}_DigitalForgePro_${dfpStamp()}.zip`;
     a.style.display = 'none';
     document.body.appendChild(a);
     a.click();
@@ -4077,11 +4095,11 @@ Return ONLY this JSON array, nothing else before or after:
 
     // Download buttons
     document.getElementById('btnDownloadPrompts').addEventListener('click', function () {
-      downloadFile(`${sanitizeFilename(STATE.form.collectionName)}_Prompts.csv`, generatePromptsCSV());
+      downloadFile(`${sanitizeFilename(STATE.form.collectionName)}_Prompts_${dfpStamp()}.csv`, generatePromptsCSV());
     });
 
     document.getElementById('btnDownloadListings').addEventListener('click', function () {
-      downloadFile(`${sanitizeFilename(STATE.form.collectionName)}_Listings.csv`, generateListingsCSV());
+      downloadFile(`${sanitizeFilename(STATE.form.collectionName)}_Listings_${dfpStamp()}.csv`, generateListingsCSV());
     });
 
     document.getElementById('btnDownloadAll').addEventListener('click', downloadAllAsZip);
