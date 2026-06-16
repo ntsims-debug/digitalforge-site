@@ -2068,5 +2068,16 @@ const App = () => {
 };
 ReactDOM.createRoot(document.getElementById('root')).render(/*#__PURE__*/React.createElement(App, null));
   </script>
+<script>
+/* Same-file re-selection fix (Chrome/Edge): Chromium does not fire 'change' when a file input's
+   value is unchanged, so re-picking the SAME file does nothing. Clearing the value on click makes
+   re-selecting the same file fire 'change' consistently across all browsers. */
+(function () {
+  document.addEventListener('click', function (ev) {
+    var el = ev.target;
+    if (el && el.tagName === 'INPUT' && el.type === 'file') { el.value = ''; }
+  }, true);
+})();
+</script>
 </body>
 </html>
