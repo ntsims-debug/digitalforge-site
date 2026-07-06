@@ -100,6 +100,129 @@ async function injectDpiMetadata(blob, dpi, mimeType) {
   });
 }
 
+// ── ADOBE RGB (1998) COLOR EMBED ─────────────────────────────────
+// Lumaprints prints unpredictably from files with NO embedded color
+// profile, and canvas/Upscayl output is untagged sRGB. We convert each
+// resized output sRGB→Adobe RGB (1998) and embed a matching ICC profile so
+// every JPG (and the PDF built from it) carries proper wide-gamut color.
+// If pixel conversion can't run on a device, we still embed sRGB so a
+// profile is NEVER missing. The matrix + ICC were verified against lcms2
+// to agree to 0/255 levels. (The standalone Gumroad tool is unchanged.)
+const ADOBE_ICC_B64 = "AAACJERHRlACEAAAbW50clJHQiBYWVogB+oABgAdAAAAAAAAYWNzcAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAPbXAAEAAAAA00EAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAJZGVzYwAAAPAAAACEY3BydAAAAXQAAABQd3RwdAAAAcQAAAAUclhZWgAAAdgAAAAUZ1hZWgAAAewAAAAUYlhZWgAAAgAAAAAUclRSQwAAAhQAAAAQZ1RSQwAAAhQAAAAQYlRSQwAAAhQAAAAQZGVzYwAAAAAAAAApRGlnaXRhbEZvcmdlIEFkb2JlIFJHQiAoMTk5OCkgY29tcGF0aWJsZQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAdGV4dAAAAABQdWJsaWMgRG9tYWluLiBBZG9iZSBSR0IgKDE5OTgpIGNvbXBhdGlibGUuIEdlbmVyYXRlZCBieSBEaWdpdGFsRm9yZ2UuAABYWVogAAAAAAAA9tcAAQAAAADTQVhZWiAAAAAAAACcFwAAT6UAAAT8WFlaIAAAAAAAADSMAACgLAAAD5ZYWVogAAAAAAAAJjQAABAwAAC+r2N1cnYAAAAAAAAAAQIzAAA=";
+const SRGB_ICC_B64  = "AAACTGxjbXMEQAAAbW50clJHQiBYWVogB+oABgAdAA8AKgASYWNzcEFQUEwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPbWAAEAAAAA0y1sY21zAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAALZGVzYwAAAQgAAAA2Y3BydAAAAUAAAABMd3RwdAAAAYwAAAAUY2hhZAAAAaAAAAAsclhZWgAAAcwAAAAUYlhZWgAAAeAAAAAUZ1hZWgAAAfQAAAAUclRSQwAAAggAAAAgZ1RSQwAAAggAAAAgYlRSQwAAAggAAAAgY2hybQAAAigAAAAkbWx1YwAAAAAAAAABAAAADGVuVVMAAAAaAAAAHABzAFIARwBCACAAYgB1AGkAbAB0AC0AaQBuAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAADAAAAAcAE4AbwAgAGMAbwBwAHkAcgBpAGcAaAB0ACwAIAB1AHMAZQAgAGYAcgBlAGUAbAB5WFlaIAAAAAAAAPbWAAEAAAAA0y1zZjMyAAAAAAABDEIAAAXe///zJQAAB5MAAP2Q///7of///aIAAAPcAADAblhZWiAAAAAAAABvoAAAOPUAAAOQWFlaIAAAAAAAACSfAAAPhAAAtsNYWVogAAAAAAAAYpcAALeHAAAY2XBhcmEAAAAAAAMAAAACZmYAAPKnAAANWQAAE9AAAApbY2hybQAAAAAAAwAAAACj1wAAVHsAAEzNAACZmgAAJmYAAA9c";
+function _b64ToBytes(b64) {
+  const bin = atob(b64);
+  const u = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+  return u;
+}
+const ADOBE_ICC = _b64ToBytes(ADOBE_ICC_B64);
+const SRGB_ICC = _b64ToBytes(SRGB_ICC_B64);
+// sRGB-linear → AdobeRGB-linear (both D65; verified against lcms2)
+const _CM = [0.71512561, 0.28487439, 0.0, 0.0, 1.0, 0.0, 0.0, 0.04116195, 0.95883805];
+const _ADOBE_GAMMA = 563 / 256;
+const _s2l = new Float32Array(256);
+for (let i = 0; i < 256; i++) {
+  const c = i / 255;
+  _s2l[i] = c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+}
+const _ENC_N = 4096;
+const _l2a = new Uint8Array(_ENC_N + 1);
+for (let i = 0; i <= _ENC_N; i++) {
+  const v = i / _ENC_N;
+  _l2a[i] = Math.max(0, Math.min(255, Math.round(Math.pow(v, 1 / _ADOBE_GAMMA) * 255)));
+}
+function _encAdobe(v) {
+  if (v <= 0) return 0;
+  if (v >= 1) return 255;
+  return _l2a[(v * _ENC_N) | 0];
+}
+// Convert a whole canvas (RGBA) sRGB→AdobeRGB in place. Returns true on success.
+function convertCanvasToAdobeRGB(ctx, w, h) {
+  const img = ctx.getImageData(0, 0, w, h);
+  const d = img.data;
+  const m0 = _CM[0], m1 = _CM[1], m2 = _CM[2], m3 = _CM[3], m4 = _CM[4], m5 = _CM[5], m6 = _CM[6], m7 = _CM[7], m8 = _CM[8];
+  for (let i = 0; i < d.length; i += 4) {
+    const r = _s2l[d[i]], g = _s2l[d[i + 1]], b = _s2l[d[i + 2]];
+    d[i] = _encAdobe(m0 * r + m1 * g + m2 * b);
+    d[i + 1] = _encAdobe(m3 * r + m4 * g + m5 * b);
+    d[i + 2] = _encAdobe(m6 * r + m7 * g + m8 * b);
+  }
+  ctx.putImageData(img, 0, 0);
+  return true;
+}
+// Insert an APP2 ICC_PROFILE marker into a JFIF JPEG, after the APP0 segment.
+function injectJpgIcc(buf, iccBytes) {
+  const bytes = new Uint8Array(buf);
+  if (bytes[0] !== 0xFF || bytes[1] !== 0xD8) return buf; // not a JPEG
+  let ins = 2;
+  if (bytes[2] === 0xFF && bytes[3] === 0xE0) {
+    const segLen = bytes[4] << 8 | bytes[5];
+    ins = 4 + segLen; // after APP0
+  }
+  const hdr = [0x49, 0x43, 0x43, 0x5F, 0x50, 0x52, 0x4F, 0x46, 0x49, 0x4C, 0x45, 0x00]; // "ICC_PROFILE\0"
+  const MAXP = 65519;
+  const total = Math.ceil(iccBytes.length / MAXP) || 1;
+  const parts = [];
+  for (let c = 0; c < total; c++) {
+    const chunk = iccBytes.subarray(c * MAXP, (c + 1) * MAXP);
+    const payloadLen = hdr.length + 2 + chunk.length;
+    const segLen = payloadLen + 2;
+    const seg = new Uint8Array(4 + payloadLen);
+    seg[0] = 0xFF;
+    seg[1] = 0xE2;
+    seg[2] = segLen >> 8 & 0xFF;
+    seg[3] = segLen & 0xFF;
+    seg.set(hdr, 4);
+    seg[16] = c + 1;
+    seg[17] = total;
+    seg.set(chunk, 18);
+    parts.push(seg);
+  }
+  let extra = 0;
+  parts.forEach(p => extra += p.length);
+  const out = new Uint8Array(bytes.length + extra);
+  out.set(bytes.subarray(0, ins), 0);
+  let off = ins;
+  parts.forEach(p => {
+    out.set(p, off);
+    off += p.length;
+  });
+  out.set(bytes.subarray(ins), off);
+  return out.buffer;
+}
+// Patch DPI then embed an ICC profile; always returns a JPEG blob.
+async function finalizeJpeg(blob, dpi, iccBytes) {
+  let buf = await blob.arrayBuffer();
+  if (dpi && dpi > 0) buf = injectJpgDpi(buf, dpi);
+  if (iccBytes) buf = injectJpgIcc(buf, iccBytes);
+  return new Blob([buf], {
+    type: 'image/jpeg'
+  });
+}
+// Tag a jsPDF document's color space via a PDF/X-style ICC OutputIntent, so the
+// embedded DeviceRGB JPEG is interpreted in the right space (Adobe RGB, or the
+// sRGB fallback) by color-managed viewers and print labs. Profile is embedded
+// uncompressed (no zlib dependency); jsPDF 2.5.x internal event hooks.
+function addPdfOutputIntent(doc, iccBytes) {
+  const internal = doc.internal;
+  const label = (iccBytes === ADOBE_ICC ? 'Adobe RGB (1998)' : 'sRGB IEC61966-2.1').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+  let bin = '';
+  for (let i = 0; i < iccBytes.length; i++) bin += String.fromCharCode(iccBytes[i]);
+  let iccId = null;
+  internal.events.subscribe('postPutResources', function () {
+    iccId = internal.newObject();
+    internal.out('<< /N 3 /Length ' + iccBytes.length + ' >>');
+    internal.out('stream');
+    internal.out(bin);
+    internal.out('endstream');
+    internal.out('endobj');
+  });
+  internal.events.subscribe('putCatalog', function () {
+    internal.out('/OutputIntents [ << /Type /OutputIntent /S /GTS_PDFX ' + '/OutputConditionIdentifier (' + label + ') ' + '/Info (' + label + ') ' + '/DestOutputProfile ' + iccId + ' 0 R >> ]');
+  });
+}
+
 // Simple emoji icon helper (keeps the build dependency-free)
 const Em = ({
   children,
@@ -125,6 +248,7 @@ const App = () => {
   const [showPreview, setShowPreview] = useState(false);
   const [previewData, setPreviewData] = useState(null);
   const [draggedOver, setDraggedOver] = useState(null);
+  const [outputFormat, setOutputFormat] = useState('both'); // 'both' | 'jpg' | 'pdf'
   const fileInputRefs = useRef({});
   const generatedFilesRef = useRef({});
   const handleDragOver = (e, ratio, orientation) => {
@@ -557,6 +681,14 @@ const App = () => {
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, w, h);
       ctx.drawImage(imgEl, 0, 0, w, h);
+      // Convert sRGB→Adobe RGB (1998) before encoding. If it can't run on
+      // this device, fall back to embedding sRGB so a profile is never missing.
+      let useAdobe = false;
+      try {
+        useAdobe = convertCanvasToAdobeRGB(ctx, w, h);
+      } catch (e) {
+        useAdobe = false;
+      }
       canvas.toBlob(blob => {
         canvas.width = 0;
         canvas.height = 0;
@@ -564,14 +696,21 @@ const App = () => {
           reject(new Error('Canvas export returned null (size too large for this device)'));
           return;
         }
-        // Embed 300 DPI so the JPG reports print resolution (pixels unchanged)
-        injectDpiMetadata(blob, 300, 'image/jpeg').then(resolve).catch(() => resolve(blob));
+        // Embed 300 DPI (pixels unchanged) + the matching ICC color profile.
+        const icc = useAdobe ? ADOBE_ICC : SRGB_ICC;
+        finalizeJpeg(blob, 300, icc).then(fb => resolve({
+          blob: fb,
+          iccBytes: icc
+        })).catch(() => resolve({
+          blob,
+          iccBytes: icc
+        }));
       }, 'image/jpeg', 0.95);
     } catch (err) {
       reject(err);
     }
   });
-  const createPDFBlob = async (jpgBlob, wPx, hPx) => {
+  const createPDFBlob = async (jpgBlob, wPx, hPx, iccBytes) => {
     const {
       jsPDF
     } = window.jspdf;
@@ -584,6 +723,9 @@ const App = () => {
       format: [mmW, mmH],
       compress: true
     });
+    // Tag the PDF's color space (Adobe RGB, or sRGB fallback) so the embedded
+    // DeviceRGB JPEG is interpreted correctly by color-managed viewers/print labs.
+    if (iccBytes) addPdfOutputIntent(doc, iccBytes);
     const dataUrl = await blobToDataURL(jpgBlob);
     doc.addImage(dataUrl, 'JPEG', 0, 0, mmW, mmH, undefined, 'FAST');
     return doc.output('blob');
@@ -633,7 +775,7 @@ const App = () => {
           })),
           imageCount: list.length
         });
-        preview.totalFiles += list.length * chosen.length * 2;
+        preview.totalFiles += list.length * chosen.length; // size-units; ×format applied at display
         preview.totalImages += list.length;
         if (tooBig.length > 0) {
           const min = groupMinDims(ratio, orientation);
@@ -700,8 +842,14 @@ const App = () => {
             }));
             await new Promise(r => setTimeout(r, 0));
             try {
-              const jpgBlob = await withTimeout(resizeToBlob(imgEl, size.width, size.height), 60000, `${size.print} timed out — likely too large for this device`);
-              const pdfBlob = await withTimeout(createPDFBlob(jpgBlob, size.width, size.height), 60000, `${size.print} PDF timed out — likely too large for this device`);
+              const jpgResult = await withTimeout(resizeToBlob(imgEl, size.width, size.height), 60000, `${size.print} timed out — likely too large for this device`);
+              const jpgBlob = jpgResult.blob;
+              // PDF wraps the JPG, so the JPG is always produced (it's also the preview source);
+              // the PDF is only built when the chosen output format includes it.
+              let pdfBlob = null;
+              if (outputFormat !== 'jpg') {
+                pdfBlob = await withTimeout(createPDFBlob(jpgBlob, size.width, size.height, jpgResult.iccBytes), 60000, `${size.print} PDF timed out — likely too large for this device`);
+              }
               generated.push({
                 ratioFolder,
                 imageFolder: imgFolder,
@@ -735,7 +883,8 @@ const App = () => {
           [key]: meta
         }));
       }
-      const totalFiles = Object.values(generatedFilesRef.current).reduce((s, a) => s + a.length * 2, 0);
+      const perItem = outputFormat === 'both' ? 2 : 1;
+      const totalFiles = Object.values(generatedFilesRef.current).reduce((s, a) => s + a.length * perItem, 0);
 
       // Build an inline preview gallery showing ONE thumbnail per image (not the
       // first N files, which would all be the same image at different sizes since
@@ -757,7 +906,8 @@ const App = () => {
         if (previewItems.length >= 12) break;
       }
       setPreviews(previewItems);
-      let msg = `✓ Done! Generated ${totalFiles} files (JPG + PDF). Click "Download ZIP" to save.`;
+      const fmtLabel = outputFormat === 'jpg' ? 'JPG' : outputFormat === 'pdf' ? 'PDF' : 'JPG + PDF';
+      let msg = `✓ Done! Generated ${totalFiles} files (${fmtLabel}). Click "Download ZIP" to save.`;
       if (skipped.length > 0) {
         msg += `\n\n⚠️ ${skipped.length} size(s) were skipped (too large for this device — try a desktop/laptop):\n` + skipped.slice(0, 8).join('\n');
       }
@@ -779,8 +929,8 @@ const App = () => {
       const root = zip.folder('Prints-300dpi');
       allFiles.forEach(f => {
         const folder = root.folder(f.ratioFolder).folder(f.imageFolder);
-        folder.file(f.jpgFilename, f.jpgBlob);
-        folder.file(f.pdfFilename, f.pdfBlob);
+        if (outputFormat !== 'pdf') folder.file(f.jpgFilename, f.jpgBlob);
+        if (outputFormat !== 'jpg' && f.pdfBlob) folder.file(f.pdfFilename, f.pdfBlob);
       });
       const blob = await zip.generateAsync({
         type: 'blob'
@@ -1651,7 +1801,7 @@ const App = () => {
       fontWeight: 600,
       color: '#fbbf24'
     }
-  }, previewData.totalFiles), /*#__PURE__*/React.createElement("div", {
+  }, previewData.totalFiles * (outputFormat === 'both' ? 2 : 1)), /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: '0.75rem',
       color: '#999'
@@ -1738,7 +1888,45 @@ const App = () => {
       color: '#888',
       fontSize: '0.72rem'
     }
-  }, f.sizes.length, " sizes \xD7 (jpg + pdf)")))))), /*#__PURE__*/React.createElement("div", {
+  }, f.sizes.length, " sizes \xD7 ", (outputFormat === 'jpg' ? '(jpg)' : outputFormat === 'pdf' ? '(pdf)' : '(jpg + pdf)'))))))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '0.75rem',
+      flexWrap: 'wrap',
+      marginBottom: '1.25rem'
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: '0.9rem',
+      color: '#ddd',
+      fontWeight: 600
+    }
+  }, "Output format:"), /*#__PURE__*/React.createElement("select", {
+    value: outputFormat,
+    onChange: e => setOutputFormat(e.target.value),
+    style: {
+      padding: '0.5rem 0.75rem',
+      background: '#222',
+      color: '#fff',
+      border: '1px solid #444',
+      borderRadius: '6px',
+      fontSize: '0.85rem',
+      cursor: 'pointer'
+    }
+  }, /*#__PURE__*/React.createElement("option", {
+    value: 'both'
+  }, "JPG + PDF (both)"), /*#__PURE__*/React.createElement("option", {
+    value: 'jpg'
+  }, "JPG only"), /*#__PURE__*/React.createElement("option", {
+    value: 'pdf'
+  }, "PDF only")), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: '0.75rem',
+      color: '#888',
+      flex: '1 1 240px'
+    }
+  }, outputFormat === 'jpg' ? "Universal — every print lab and home printer takes JPG. Both formats carry Adobe RGB." : outputFormat === 'pdf' ? "Fixed-size pages — foolproof \u201Cprint at actual size\u201D for non-technical buyers." : "Both in the ZIP — JPG for labs, PDF for exact-size home printing.")), /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       gap: '1rem',

@@ -1,0 +1,139 @@
+[
+  {
+    "name": "Gallery White",
+    "canvas": "portrait",
+    "layout": "single",
+    "wall_tone": "warm white",
+    "light": "light",
+    "palette": [
+      "#f4f1ec",
+      "#e9e5dd",
+      "#c9b08a"
+    ],
+    "mood": [
+      "clean",
+      "minimal",
+      "bright"
+    ],
+    "best_for": [
+      "bold art",
+      "dark art",
+      "colorful prints",
+      "photography"
+    ],
+    "notes": "Bright warm-white gallery wall. Great backdrop for dark, bold, or colorful pieces.",
+    "id": "starter_1",
+    "src": "./rooms/room_gallery_white.jpg",
+    "starter": true
+  },
+  {
+    "name": "Warm Living Room",
+    "canvas": "landscape",
+    "layout": "single",
+    "wall_tone": "warm greige",
+    "light": "medium",
+    "palette": [
+      "#e7ddcf",
+      "#d8ccba",
+      "#9aa7a0"
+    ],
+    "mood": [
+      "cozy",
+      "inviting",
+      "neutral"
+    ],
+    "best_for": [
+      "landscape art",
+      "neutral palettes",
+      "pairs",
+      "botanical"
+    ],
+    "notes": "Greige living-room wall above a sofa. Wide wall suits landscape pieces or a pair.",
+    "id": "starter_2",
+    "src": "./rooms/room_warm_living.jpg",
+    "starter": true
+  },
+  {
+    "name": "Sage Nursery",
+    "canvas": "portrait",
+    "layout": "single",
+    "wall_tone": "soft sage green",
+    "light": "light",
+    "palette": [
+      "#d9e3d2",
+      "#c7d4be",
+      "#f3ece1"
+    ],
+    "mood": [
+      "calm",
+      "soft",
+      "sweet"
+    ],
+    "best_for": [
+      "nursery art",
+      "pastel",
+      "watercolor",
+      "animals",
+      "kids"
+    ],
+    "notes": "Soft sage nursery wall above a crib. Ideal for pastel, watercolor, and nursery prints.",
+    "id": "starter_3",
+    "src": "./rooms/room_sage_nursery.jpg",
+    "starter": true
+  },
+  {
+    "name": "Moody Study",
+    "canvas": "portrait",
+    "layout": "single",
+    "wall_tone": "deep charcoal navy",
+    "light": "dark",
+    "palette": [
+      "#2a3340",
+      "#1d2430",
+      "#caa968"
+    ],
+    "mood": [
+      "moody",
+      "dramatic",
+      "sophisticated"
+    ],
+    "best_for": [
+      "light art",
+      "airy minimal",
+      "line art",
+      "typography",
+      "bright florals"
+    ],
+    "notes": "Dark charcoal-navy wall. By the contrast rule, it makes light, airy, or bright art pop.",
+    "id": "starter_4",
+    "src": "./rooms/room_moody_study.jpg",
+    "starter": true
+  },
+  {
+    "name": "Scandi Bedroom",
+    "canvas": "landscape",
+    "layout": "pair",
+    "wall_tone": "cool light grey",
+    "light": "medium",
+    "palette": [
+      "#e3e5e8",
+      "#d2d6db",
+      "#b9b2a6"
+    ],
+    "mood": [
+      "calm",
+      "airy",
+      "modern"
+    ],
+    "best_for": [
+      "pairs",
+      "calm neutrals",
+      "abstract",
+      "line art"
+    ],
+    "notes": "Light grey over-bed wall. Wide and balanced \u2014 perfect for a matched pair above the headboard.",
+    "id": "starter_5",
+    "src": "./rooms/room_scandi_bedroom.jpg",
+    "starter": true
+  }
+]
