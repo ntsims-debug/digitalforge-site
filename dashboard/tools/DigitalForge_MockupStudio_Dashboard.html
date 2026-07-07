@@ -336,31 +336,69 @@ async function downscale(src,max=1568,q=0.85){
   c.getContext('2d').drawImage(im,0,0,c.width,c.height);
   return {dataUrl:c.toDataURL('image/jpeg',q),mime:'image/jpeg'};
 }
-/* store rooms a bit smaller so localStorage stays healthy */
+/* store rooms at a sensible size (IndexedDB has plenty of room, but keep exports & perf reasonable) */
 async function downscaleForStorage(dataUrl,max=2200,q=0.9){
   try{ return (await downscale(dataUrl,max,q)).dataUrl; }catch(e){ return dataUrl; }
 }
 
-/* ---------------- catalog (localStorage = single source of truth) ---------------- */
+/* ---------------- catalog storage (IndexedDB = single source of truth) ----------------
+   Room photos are far too large for localStorage's ~5 MB cap, so the library lives in
+   IndexedDB (hundreds of MB+). Import/Export JSON still works and the catalog is never
+   hardcoded. Any library saved by the older localStorage build is migrated automatically. */
+const IDB_NAME='dfp_mockup', IDB_STORE='kv', IDB_KEY='rooms';
+function idbOpen(){
+  return new Promise((res,rej)=>{
+    if(!window.indexedDB){ rej(new Error('no-indexeddb')); return; }
+    const req=indexedDB.open(IDB_NAME,1);
+    req.onupgradeneeded=()=>{ if(!req.result.objectStoreNames.contains(IDB_STORE)) req.result.createObjectStore(IDB_STORE); };
+    req.onsuccess=()=>res(req.result);
+    req.onerror=()=>rej(req.error||new Error('idb-open-failed'));
+  });
+}
+function idbGet(key){
+  return idbOpen().then(db=>new Promise((res,rej)=>{
+    const r=db.transaction(IDB_STORE,'readonly').objectStore(IDB_STORE).get(key);
+    r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error);
+  }));
+}
+function idbSet(key,val){
+  return idbOpen().then(db=>new Promise((res,rej)=>{
+    const tx=db.transaction(IDB_STORE,'readwrite');
+    tx.objectStore(IDB_STORE).put(val,key);
+    tx.oncomplete=()=>res(true); tx.onerror=()=>rej(tx.error); tx.onabort=()=>rej(tx.error||new Error('idb-abort'));
+  }));
+}
+
 let ROOMS=[];
-function saveRooms(){
-  try{ localStorage.setItem(STORE_ROOMS,JSON.stringify(ROOMS)); }
-  catch(e){ alert('Could not save your room library — the browser storage may be full. Export your library, then remove a few large rooms.'); }
+async function saveRooms(){
+  try{
+    await idbSet(IDB_KEY, ROOMS);
+  }catch(e){
+    // last-resort fallback for tiny libraries if IndexedDB is unavailable/blocked
+    try{ localStorage.setItem(STORE_ROOMS, JSON.stringify(ROOMS)); }
+    catch(e2){ alert('Could not save your room library — your browser blocked storage. Your rooms are still loaded; use “Export library (JSON)” to save them to a file.'); }
+  }
 }
 async function seedStarterIfEmpty(){
+  // 1) existing IndexedDB library?
+  try{
+    const existing=await idbGet(IDB_KEY);
+    if(Array.isArray(existing) && existing.length){ ROOMS=existing; return; }
+  }catch(e){}
+  // 2) migrate a library saved by the older localStorage build, if present
   try{
     const raw=localStorage.getItem(STORE_ROOMS);
-    if(raw){ ROOMS=JSON.parse(raw)||[]; if(ROOMS.length) return; }
-  }catch(e){ ROOMS=[]; }
+    if(raw){ const arr=JSON.parse(raw)||[]; if(arr.length){ ROOMS=arr; await saveRooms(); try{ localStorage.removeItem(STORE_ROOMS); }catch(_){ } return; } }
+  }catch(e){}
+  // 3) first run — seed the starter examples
   await loadStarterPack(false);
 }
 async function loadStarterPack(replace){
   try{
     const resp=await fetch('./starter-rooms.json',{cache:'no-store'});
     const starter=await resp.json();
-    if(replace) ROOMS=starter.slice();
-    else ROOMS=starter.slice();
-    saveRooms();
+    ROOMS=starter.slice();
+    await saveRooms();
   }catch(e){ ROOMS=ROOMS||[]; }
 }
 
@@ -412,7 +450,7 @@ async function handleRoomUpload(files){
       name:f.name.replace(/\.[^.]+$/,''), src:stored, canvas:'', layout:'single',
       wall_tone:'', light:'', palette:[], mood:[], best_for:[], notes:'', starter:false });
   }
-  saveRooms(); renderRooms();
+  await saveRooms(); renderRooms();
 }
 function deleteRoom(id){
   const r=ROOMS.find(x=>x.id===id); if(!r)return;
@@ -455,7 +493,7 @@ $('importInput').addEventListener('change',async e=>{
     const txt=await f.text(); const data=JSON.parse(txt);
     if(!Array.isArray(data))throw new Error('Not a room library file');
     if(!confirm('Replace your current room library with this file ('+data.length+' rooms)?'))return;
-    ROOMS=data; saveRooms(); renderRooms();
+    ROOMS=data; await saveRooms(); renderRooms();
   }catch(err){ alert('Could not import: '+(err.message||err)); }
 });
 $('resetStarterBtn').addEventListener('click',async()=>{
@@ -513,7 +551,7 @@ async function autoTagRoom(id){
     if(Array.isArray(out.mood))r.mood=out.mood.slice(0,4);
     if(Array.isArray(out.best_for))r.best_for=out.best_for.slice(0,4);
     r.notes=out.notes||'';
-    saveRooms(); renderRooms();
+    await saveRooms(); renderRooms();
   }catch(err){ r.notes=old||''; renderRooms(); alert('Auto-tag failed: '+(err.message||err)); }
 }
 
