@@ -87,8 +87,17 @@ h3.sec{font-size:.78rem;letter-spacing:1.5px;text-transform:uppercase;color:var(
 .promptbox{background:var(--ink3);border:1px solid var(--line);border-radius:8px;padding:11px;font-size:.8rem;color:var(--white);line-height:1.55;white-space:pre-wrap;margin-bottom:9px;}
 
 /* COMPOSE TAB */
-.work{display:grid;grid-template-columns:1fr 318px;gap:20px;align-items:start;}
-@media(max-width:900px){.work{grid-template-columns:1fr;}}
+.work{display:grid;grid-template-columns:1fr 300px;gap:18px;align-items:start;}
+@media(max-width:820px){.work{grid-template-columns:1fr;}}
+.stage-col{min-width:0;}
+.side-col{display:flex;flex-direction:column;gap:14px;}
+.compose-topbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 14px;margin-bottom:14px;}
+.compose-topbar .lbl{font-size:.72rem;color:var(--accent);font-weight:700;letter-spacing:1px;text-transform:uppercase;}
+.compose-topbar .rn{font-size:.82rem;color:var(--mist);margin-left:4px;}
+.adjust-bar{margin-top:12px;}
+.adjust-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:10px 16px;align-items:end;}
+.adjust-grid .full{grid-column:1/-1;}
+.adjust-bar .ctrl{margin-bottom:0;}
 .stage-wrap{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;}
 .stage{position:relative;width:100%;background:repeating-conic-gradient(#161b2b 0% 25%,#11141f 0% 50%) 50%/26px 26px;
   border-radius:8px;overflow:hidden;display:flex;align-items:center;justify-content:center;min-height:320px;}
@@ -162,16 +171,19 @@ select{width:100%;background:var(--ink2);color:var(--white);border:1px solid var
       <div>
         <div class="drop" id="drop">
           <div class="big">Drop a print here</div>
-          <div class="hint">or click to choose a file. Single piece, pair, or triptych.</div>
+          <div class="hint">or click to choose files — one image, or 2–3 files for a pair / triptych.</div>
         </div>
         <div class="preview hidden" id="preview">
           <img id="thumb" alt="print preview">
           <div class="row">
             <button class="btn" id="matchBtn">Match to my rooms</button>
+            <button class="btn ghost" id="newRoomBtn">✨ New room prompt</button>
             <button class="btn ghost" id="clearBtn">Clear</button>
           </div>
+          <p class="hint" style="margin-top:8px;">“Match” ranks the rooms you already have. “New room prompt” writes a generation prompt for a brand-new room that flatters this art — paste it into ChatGPT / Midjourney / any image tool, then upload the result back into the Rooms tab.</p>
         </div>
         <p class="hint" id="status" style="margin-top:12px;"></p>
+        <div id="newRoomPromptWrap" style="margin-top:12px;"></div>
         <p class="hint" style="margin-top:12px;">The print is resized and sent to Anthropic under your own API key for analysis. It isn't sent to our servers.</p>
       </div>
       <div id="results" class="hidden">
@@ -187,72 +199,71 @@ select{width:100%;background:var(--ink2);color:var(--white);border:1px solid var
 
   <!-- COMPOSE TAB -->
   <section id="tab-compose" class="tab-panel">
-    <div class="work">
-      <div class="stage-wrap">
-        <div class="stage" id="stage">
-          <div class="empty-state" id="emptyState">
-            <div class="big">Start with a room</div>
-            <div class="small">Pick a room from your library (Rooms tab), or load a room photo below, then add a print. Drag to position, scale with the corner handles, rotate, add a frame and a wall shadow, and export a listing-ready image at the room photo's full resolution.</div>
-          </div>
-          <canvas id="canvas" class="hidden"></canvas>
-        </div>
-        <div class="toolbar">
-          <button class="btn ghost" id="addArtBtn" disabled>＋ Add a print</button>
-          <button class="btn ghost" id="triptychBtn" disabled>Arrange row ⋯</button>
-        </div>
-      </div>
-      <div class="controls">
-        <div class="cpanel">
-          <h3><span class="step-n">1</span>Room</h3>
-          <div class="row">
-            <button class="btn ghost sm" id="pickRoomBtn">Choose from library</button>
-            <button class="btn ghost sm" id="loadRoomBtn">Load a photo</button>
-          </div>
-          <p class="hint" id="composeRoomName" style="margin-top:9px;"></p>
-        </div>
-        <div class="cpanel">
-          <h3><span class="step-n">2</span>Prints on the wall</h3>
-          <ul class="layers" id="layerList"></ul>
-          <p class="hint" id="layerHint">Add a print to begin. For a triptych, add all pieces, then use “Arrange row”.</p>
-        </div>
-        <div class="cpanel">
-          <h3><span class="step-n">3</span>Adjust selected print</h3>
-          <div id="adjustBody">
-            <div class="ctrl"><label>Size <span id="vScale">100%</span></label><input type="range" id="scale" min="5" max="300" value="100"></div>
-            <div class="ctrl"><label>Rotation <span id="vRot">0°</span></label><input type="range" id="rot" min="-25" max="25" value="0"></div>
-            <div class="row2">
-              <div class="ctrl"><label>Wall tilt ↔ <span id="vSkewX">0°</span></label><input type="range" id="skewX" min="-20" max="20" value="0"></div>
-              <div class="ctrl"><label>Wall tilt ↕ <span id="vSkewY">0°</span></label><input type="range" id="skewY" min="-20" max="20" value="0"></div>
-            </div>
-            <div class="ctrl"><label>Frame</label>
-              <select id="frame">
-                <option value="none">No frame (print only)</option>
-                <option value="thin-black" selected>Thin black</option>
-                <option value="thin-gold">Thin gold</option>
-                <option value="mat">White mat + black frame</option>
-                <option value="deco">Gold Deco frame</option>
-              </select>
-            </div>
-            <label class="switch"><input type="checkbox" id="shadowOn" checked> Wall shadow</label>
-            <div id="shadowControls">
-              <div class="row2">
-                <div class="ctrl"><label>Softness</label><input type="range" id="blur" min="0" max="60" value="22"></div>
-                <div class="ctrl"><label>Depth</label><input type="range" id="dist" min="0" max="40" value="12"></div>
-              </div>
-              <div class="ctrl"><label>Shadow strength</label><input type="range" id="opac" min="0" max="80" value="38"></div>
-            </div>
-            <button class="btn danger" id="delBtn" style="width:100%;">Remove this print</button>
-          </div>
-          <p class="hint" id="noSel">No print selected.</p>
-        </div>
-        <div class="cpanel">
-          <h3><span class="step-n">4</span>Export</h3>
-          <button class="btn" id="exportComposeBtn" style="width:100%;margin-bottom:9px;" disabled>Save mockup (PNG)</button>
-          <button class="btn ghost" id="resetComposeBtn" style="width:100%;">Start over</button>
-        </div>
-      </div>
+    <div class="compose-topbar">
+      <span class="lbl">Room</span>
+      <button class="btn ghost sm" id="pickRoomBtn">Choose from library</button>
+      <button class="btn ghost sm" id="loadRoomBtn">Load a photo</button>
+      <span class="rn" id="composeRoomName"></span>
     </div>
-  </section>
+    <div class="work">
+      <div class="stage-col">
+        <div class="stage-wrap">
+          <div class="stage" id="stage">
+            <div class="empty-state" id="emptyState">
+              <div class="big">Start with a room</div>
+              <div class="small">Choose a room from your library (or load a photo) above, then add a print. Drag to position, scale with the corner handles, rotate, add a frame and a wall shadow. The controls sit right below the room so you see every change. Export at the room photo's full resolution.</div>
+            </div>
+            <canvas id="canvas" class="hidden"></canvas>
+          </div>
+          <div class="toolbar">
+            <button class="btn ghost" id="addArtBtn" disabled>＋ Add a print</button>
+            <button class="btn ghost" id="triptychBtn" disabled>Arrange row ⋯</button>
+          </div>
+          <div class="cpanel adjust-bar">
+            <h3>Adjust selected print</h3>
+            <div id="adjustBody">
+              <div class="adjust-grid">
+                <div class="ctrl"><label>Size <span id="vScale">100%</span></label><input type="range" id="scale" min="5" max="300" value="100"></div>
+                <div class="ctrl"><label>Rotation <span id="vRot">0°</span></label><input type="range" id="rot" min="-25" max="25" value="0"></div>
+                <div class="ctrl"><label>Wall tilt ↔ <span id="vSkewX">0°</span></label><input type="range" id="skewX" min="-20" max="20" value="0"></div>
+                <div class="ctrl"><label>Wall tilt ↕ <span id="vSkewY">0°</span></label><input type="range" id="skewY" min="-20" max="20" value="0"></div>
+                <div class="ctrl"><label>Frame</label>
+                  <select id="frame">
+                    <option value="none">No frame (print only)</option>
+                    <option value="thin-black" selected>Thin black</option>
+                    <option value="thin-gold">Thin gold</option>
+                    <option value="mat">White mat + black frame</option>
+                    <option value="deco">Gold Deco frame</option>
+                  </select>
+                </div>
+                <div class="ctrl"><label>Wall shadow</label><label class="switch" style="margin:2px 0 0;"><input type="checkbox" id="shadowOn" checked> On</label></div>
+                <div id="shadowControls" class="full">
+                  <div class="adjust-grid">
+                    <div class="ctrl"><label>Shadow softness</label><input type="range" id="blur" min="0" max="60" value="22"></div>
+                    <div class="ctrl"><label>Shadow depth</label><input type="range" id="dist" min="0" max="40" value="12"></div>
+                    <div class="ctrl"><label>Shadow strength</label><input type="range" id="opac" min="0" max="80" value="38"></div>
+                  </div>
+                </div>
+              </div>
+              <button class="btn danger" id="delBtn" style="margin-top:12px;">Remove this print</button>
+            </div>
+            <p class="hint" id="noSel">Select a print on the wall (or in the list) to adjust it.</p>
+          </div>
+        </div>
+        <div class="side-col">
+          <div class="cpanel">
+            <h3>Prints on the wall</h3>
+            <ul class="layers" id="layerList"></ul>
+            <p class="hint" id="layerHint">Add a print to begin. For a pair or triptych, add all pieces, then use “Arrange row”.</p>
+          </div>
+          <div class="cpanel">
+            <h3>Export</h3>
+            <button class="btn" id="exportComposeBtn" style="width:100%;margin-bottom:9px;" disabled>Save mockup (PNG)</button>
+            <button class="btn ghost" id="resetComposeBtn" style="width:100%;">Start over</button>
+          </div>
+        </div>
+      </div>
+    </section>
 </div>
 
 <!-- room picker modal -->
@@ -302,7 +313,7 @@ const STORE_ROOMS='dfp_mockup_rooms';
 const API_URL='https://api.anthropic.com/v1/messages';
 const DEFAULT_MODEL='claude-sonnet-4-6';
 const EMBEDDED = window.self !== window.top;
-function getKey(){ try{ return localStorage.getItem('dfp_api_key')||''; }catch(e){ return ''; } }
+function getKey(){ try{ return (localStorage.getItem('dfp_api_key')||'').trim(); }catch(e){ return ''; } }
 function getModel(){ try{ return localStorage.getItem('dfp_working_model')||DEFAULT_MODEL; }catch(e){ return DEFAULT_MODEL; } }
 function hasKey(){ return !!getKey(); }
 
@@ -520,7 +531,7 @@ async function callClaude(messages,maxTokens){
   });
   if(!resp.ok){
     let detail=''; try{ detail=(await resp.json()).error?.message||''; }catch(e){}
-    if(resp.status===401) throw new Error('Your API key was rejected (401). Check it in the Dashboard.');
+    if(resp.status===401) throw new Error('Your Anthropic API key was rejected (401). Re-enter a current key via the “API Key” button at the top of the Dashboard — create a fresh one at console.anthropic.com if needed. (The “API connected” badge only means a key is saved, not that it works.)');
     throw new Error('API error '+resp.status+(detail?': '+detail:''));
   }
   const data=await resp.json();
@@ -556,20 +567,36 @@ async function autoTagRoom(id){
 }
 
 /* ---------------- MATCH tab ---------------- */
-let printFull=null, printSmall=null, printMime='image/jpeg';
+let printFull=null, printSmall=null, printMime='image/jpeg', printPanels=[];
 function showPreview(dataUrl){ printFull=dataUrl; $('thumb').src=dataUrl; $('preview').classList.remove('hidden'); $('drop').classList.add('hidden'); }
-async function handlePrint(file){
-  if(!file||!file.type.startsWith('image/'))return;
-  const raw=await fileToDataURL(file); showPreview(raw);
-  const {dataUrl,mime}=await downscale(raw,1568,0.85); printSmall=dataUrl; printMime=mime;
+/* stitch 1–3 panels into one side-by-side image so Claude sees the whole pair/triptych */
+async function compositePanels(dataUrls){
+  if(dataUrls.length<=1) return dataUrls[0];
+  const imgs=await Promise.all(dataUrls.map(loadImage));
+  const H=Math.max(...imgs.map(i=>i.naturalHeight))||1000;
+  const gap=Math.round(H*0.04);
+  const parts=imgs.map(i=>({img:i,w:Math.round(i.naturalWidth*(H/i.naturalHeight)),h:H}));
+  const W=parts.reduce((s,p)=>s+p.w,0)+gap*(parts.length-1);
+  const c=document.createElement('canvas'); c.width=W; c.height=H;
+  const cx=c.getContext('2d'); cx.fillStyle='#ffffff'; cx.fillRect(0,0,W,H);
+  let x=0; for(const p of parts){ cx.drawImage(p.img,x,0,p.w,p.h); x+=p.w+gap; }
+  return c.toDataURL('image/jpeg',0.92);
 }
-$('drop').addEventListener('click',()=>$('artInput')&&pickPrintFile());
-function pickPrintFile(){ const inp=document.createElement('input'); inp.type='file'; inp.accept='image/*';
-  inp.onchange=e=>handlePrint(e.target.files[0]); inp.click(); }
+async function handlePrints(files){
+  const imgFiles=[...files].filter(f=>f.type.startsWith('image/')).slice(0,3);
+  if(!imgFiles.length)return;
+  printPanels=[]; for(const f of imgFiles){ printPanels.push(await fileToDataURL(f)); }
+  const composite=await compositePanels(printPanels);
+  showPreview(composite);
+  const {dataUrl,mime}=await downscale(composite,1568,0.85); printSmall=dataUrl; printMime=mime;
+}
+$('drop').addEventListener('click',()=>pickPrintFile());
+function pickPrintFile(){ const inp=document.createElement('input'); inp.type='file'; inp.accept='image/*'; inp.multiple=true;
+  inp.onchange=e=>handlePrints(e.target.files); inp.click(); }
 ['dragover','dragenter'].forEach(ev=>$('drop').addEventListener(ev,e=>{e.preventDefault();$('drop').classList.add('over');}));
 ['dragleave','drop'].forEach(ev=>$('drop').addEventListener(ev,e=>{e.preventDefault();$('drop').classList.remove('over');}));
-$('drop').addEventListener('drop',e=>{e.preventDefault();handlePrint(e.dataTransfer.files[0]);});
-$('clearBtn').addEventListener('click',()=>{ printFull=printSmall=null; $('preview').classList.add('hidden'); $('drop').classList.remove('hidden'); $('results').classList.add('hidden'); });
+$('drop').addEventListener('drop',e=>{e.preventDefault();handlePrints(e.dataTransfer.files);});
+$('clearBtn').addEventListener('click',()=>{ printFull=printSmall=null; printPanels=[]; $('preview').classList.add('hidden'); $('drop').classList.remove('hidden'); $('results').classList.add('hidden'); $('newRoomPromptWrap').innerHTML=''; });
 
 function scoreColor(s){ if(s>=75)return 'var(--good)'; if(s>=55)return 'var(--warn)'; return 'var(--bad)'; }
 function catalogForMatch(){
@@ -647,6 +674,45 @@ $('matchBtn').addEventListener('click',async()=>{
   finally{ $('matchBtn').disabled=false; }
 });
 
+/* ---- on-demand: write a brand-new room generation prompt for THIS print ---- */
+const NEW_ROOM_PROMPT=`You are helping an art seller create a NEW empty-room mockup that will showcase a specific print. Look at the print image and write a single, ready-to-paste image-generation prompt (works in ChatGPT/DALL·E, Midjourney, Stable Diffusion, etc.) that produces a photorealistic EMPTY room whose wall, lighting, palette and styling flatter THIS artwork.
+
+Requirements for the room prompt you write:
+- Photorealistic interior photograph; the display wall is straight-on and parallel to the camera, centered and undistorted.
+- Include exactly ONE empty framed opening (or a matching number of empty frames for a pair/triptych) sized for the art's orientation (portrait / landscape / square). Leave the frame(s) EMPTY / blank so the print can be composited in later.
+- Choose the wall colour/tone by contrast (dark wall for light or airy art; light wall for dark or moody art), plus complementary furniture, props, and lighting that suit the art's mood and palette.
+- Keep it one flowing paragraph, concrete and specific, no camera/lens jargon dumps.
+
+Respond with ONLY valid JSON, no markdown, no preamble:
+{"analysis":{"orientation":"","palette":["#hex"],"mood":"","panels":1},"room_prompt":"the full ready-to-paste room generation prompt"}`;
+function renderNewRoomPrompt(data){
+  const wrap=$('newRoomPromptWrap'); wrap.innerHTML='';
+  const prompt=data && data.room_prompt;
+  if(!prompt){ wrap.innerHTML='<p class="hint">No prompt came back — try again.</p>'; return; }
+  const box=document.createElement('div'); box.className='newroom';
+  box.innerHTML='<div class="label">New room generation prompt — paste into your AI image tool</div>'+
+    '<div class="promptbox">'+escapeHtml(prompt)+'</div>'+
+    '<button class="btn ghost sm" id="copyNewRoom">Copy prompt</button>'+
+    '<p class="hint" style="margin-top:8px;">Generate the room in your image tool, then upload the result in the <b>Rooms</b> tab to use it here.</p>';
+  wrap.appendChild(box);
+  $('copyNewRoom').addEventListener('click',()=>{ navigator.clipboard.writeText(prompt); $('copyNewRoom').textContent='Copied ✓'; });
+}
+$('newRoomBtn').addEventListener('click',async()=>{
+  if(!printSmall){ alert('Drop a print first.'); return; }
+  if(!hasKey()){ alert('Add your Anthropic API key in the Dashboard to use this.'); return; }
+  $('newRoomBtn').disabled=true;
+  $('status').innerHTML='<span class="spinner"></span>Writing a room prompt tailored to this print…';
+  try{
+    const b64=printSmall.split(',')[1];
+    const out=await callClaude([{role:'user',content:[
+      {type:'image',source:{type:'base64',media_type:printMime,data:b64}},
+      {type:'text',text:NEW_ROOM_PROMPT}
+    ]}],900);
+    renderNewRoomPrompt(out); $('status').textContent='';
+  }catch(err){ $('status').innerHTML='<span class="err">Couldn’t write a room prompt: '+escapeHtml(err.message||String(err))+'</span>'; }
+  finally{ $('newRoomBtn').disabled=false; }
+});
+
 /* ---------------- COMPOSE tab (compositor engine) ---------------- */
 const canvas=$('canvas'), ctx=canvas.getContext('2d'), stage=$('stage'), emptyState=$('emptyState');
 const compose={ room:null, layers:[], active:-1 }; let nameCount=0;
@@ -695,7 +761,7 @@ canvas.addEventListener('pointerdown',e=>{ if(!compose.room)return; const {x,y}=
       for(let i=0;i<4;i++){ if(Math.hypot(x-h.corners[i][0],y-h.corners[i][1])<=h.r*1.8){ drag={mode:'scale',L,startDist:Math.hypot(x-L.x,y-L.y),startScale:L.scaleMul}; canvas.setPointerCapture(e.pointerId); return; } } } }
   for(let i=compose.layers.length-1;i>=0;i--){ if(pointInLayer(compose.layers[i],x,y)){ compose.active=i; syncControls(); refreshLayerList();
     drag={mode:'move',L:compose.layers[i],ox:x-compose.layers[i].x,oy:y-compose.layers[i].y}; canvas.setPointerCapture(e.pointerId); renderCompose(); return; } }
-  compose.active=-1; syncControls(); refreshLayerList(); renderCompose(); });
+  /* clicking empty wall keeps the current selection so the controls don't collapse */ });
 canvas.addEventListener('pointermove',e=>{ if(!drag)return; const {x,y}=toCanvas(e); const L=drag.L;
   if(drag.mode==='move'){ L.x=x-drag.ox; L.y=y-drag.oy; }
   else if(drag.mode==='scale'){ const d=Math.hypot(x-L.x,y-L.y); L.scaleMul=Math.max(0.05,Math.min(3,drag.startScale*(d/(drag.startDist||1)))); syncControls(); }
@@ -745,10 +811,11 @@ $('artInput').addEventListener('change',async e=>{ const files=[...e.target.file
   for(const f of files){ const url=await fileToDataURL(f); const im=await loadImage(url); compose.layers.push(newLayer(im)); }
   compose.active=compose.layers.length-1; refreshLayerList(); syncControls(); renderCompose(); });
 /* compose: arrange row (triptych/pair) */
-$('triptychBtn').addEventListener('click',()=>{ const n=compose.layers.length; if(n<2){ alert('Add at least two prints first, then arrange them.'); return; }
+function arrangeRow(){ const n=compose.layers.length; if(n<2||!compose.room)return;
   const W=compose.room.naturalWidth,H=compose.room.naturalHeight; const margin=W*0.10,usable=W-2*margin,gap=usable*0.04; const cellW=(usable-gap*(n-1))/n;
   compose.layers.forEach((L,i)=>{ L.rot=0;L.skewX=0;L.skewY=0; L.scaleMul=(cellW/(L.img.naturalWidth*L.baseScale)); L.x=margin+cellW/2+i*(cellW+gap); L.y=H*0.42; });
-  compose.active=0; syncControls(); refreshLayerList(); renderCompose(); });
+  compose.active=0; syncControls(); refreshLayerList(); renderCompose(); }
+$('triptychBtn').addEventListener('click',()=>{ if(compose.layers.length<2){ alert('Add at least two prints first, then arrange them.'); return; } arrangeRow(); });
 /* compose: export */
 $('exportComposeBtn').addEventListener('click',()=>{ renderCompose(false); const url=canvas.toDataURL('image/png'); renderCompose();
   const a=document.createElement('a'); a.download='DigitalForge_mockup_'+Date.now()+'.png'; a.href=url; a.click(); });
@@ -777,7 +844,14 @@ async function useRoomInCompose(roomId,withPrint){
   const r=ROOMS.find(x=>x.id===roomId); if(!r){ alert('That room is no longer in your library.'); return; }
   switchTab('compose');
   await setComposeRoom(r.src,r.name);
-  if(withPrint && printFull){ const im=await loadImage(printFull); compose.layers=[newLayer(im)]; compose.active=0; refreshLayerList(); syncControls(); renderCompose(); }
+  if(withPrint && (printPanels.length || printFull)){
+    const panels = printPanels.length ? printPanels : [printFull];
+    compose.layers=[];
+    for(const p of panels){ const im=await loadImage(p); compose.layers.push(newLayer(im)); }
+    compose.active=compose.layers.length-1;
+    refreshLayerList(); syncControls(); renderCompose();
+    if(compose.layers.length>1) arrangeRow();
+  }
 }
 
 /* ---------------- tabs ---------------- */
