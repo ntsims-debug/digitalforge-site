@@ -151,10 +151,52 @@ function convertCanvasToAdobeRGB(ctx, w, h) {
   ctx.putImageData(img, 0, 0);
   return true;
 }
+// Remove any APP2 ICC_PROFILE segments already present. Browser canvas encoders
+// (Chrome) embed their own sRGB profile, and a JPEG carrying two profiles is
+// ambiguous — some readers/labs then ignore both, silently losing our tagging.
+function stripJpgIcc(bytes) {
+  const keep = [bytes.subarray(0, 2)];
+  let i = 2;
+  while (i < bytes.length - 1) {
+    if (bytes[i] !== 0xFF) break;
+    const marker = bytes[i + 1];
+    if (marker === 0xD8) {
+      i += 2;
+      continue;
+    }
+    // standalone markers carry no length payload
+    if (marker === 0x01 || marker >= 0xD0 && marker <= 0xD7) {
+      keep.push(bytes.subarray(i, i + 2));
+      i += 2;
+      continue;
+    }
+    if (marker === 0xDA || marker === 0xD9) {
+      keep.push(bytes.subarray(i)); // SOS onward: entropy data, copy wholesale
+      i = bytes.length;
+      break;
+    }
+    const segLen = bytes[i + 2] << 8 | bytes[i + 3];
+    if (segLen < 2) break; // malformed; bail out safely
+    const isIcc = marker === 0xE2 && bytes[i + 4] === 0x49 && bytes[i + 5] === 0x43 && bytes[i + 6] === 0x43 && bytes[i + 7] === 0x5F && bytes[i + 8] === 0x50 && bytes[i + 9] === 0x52 && bytes[i + 10] === 0x4F && bytes[i + 11] === 0x46 && bytes[i + 12] === 0x49 && bytes[i + 13] === 0x4C && bytes[i + 14] === 0x45 && bytes[i + 15] === 0x00;
+    if (!isIcc) keep.push(bytes.subarray(i, i + 2 + segLen));
+    i += 2 + segLen;
+  }
+  if (i < bytes.length) keep.push(bytes.subarray(i));
+  let total = 0;
+  keep.forEach(k => total += k.length);
+  const out = new Uint8Array(total);
+  let off = 0;
+  keep.forEach(k => {
+    out.set(k, off);
+    off += k.length;
+  });
+  return out;
+}
 // Insert an APP2 ICC_PROFILE marker into a JFIF JPEG, after the APP0 segment.
 function injectJpgIcc(buf, iccBytes) {
-  const bytes = new Uint8Array(buf);
-  if (bytes[0] !== 0xFF || bytes[1] !== 0xD8) return buf; // not a JPEG
+  const raw = new Uint8Array(buf);
+  if (raw[0] !== 0xFF || raw[1] !== 0xD8) return buf; // not a JPEG
+  const bytes = stripJpgIcc(raw); // ensure exactly ONE profile ends up in the file
   let ins = 2;
   if (bytes[2] === 0xFF && bytes[3] === 0xE0) {
     const segLen = bytes[4] << 8 | bytes[5];
