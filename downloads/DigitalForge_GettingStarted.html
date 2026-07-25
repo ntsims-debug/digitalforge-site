@@ -33,7 +33,7 @@
     margin: 0; padding: 0;
     background: var(--paper); color: var(--ink);
     font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif;
-    font-size: 10pt; line-height: 1.3;
+    font-size: 9.5pt; line-height: 1.28;
   }
 
   .page {
@@ -47,48 +47,48 @@
   .masthead {
     background: var(--ink); color: var(--white);
     margin: 0 -0.6in 11pt -0.6in;
-    padding: 15pt 0.6in 13pt 0.6in;
+    padding: 12pt 0.6in 10pt 0.6in;
     border-bottom: 4pt solid var(--forge);
     position: relative;
   }
   .masthead .eyebrow {
     color: var(--forge); font-size: 10pt; font-weight: 800;
-    letter-spacing: 5pt; text-transform: uppercase; margin: 0 0 12pt 0;
+    letter-spacing: 5pt; text-transform: uppercase; margin: 0 0 8pt 0;
   }
   .masthead .title {
-    font-size: 25pt; font-weight: 900; line-height: 1.0;
+    font-size: 22pt; font-weight: 900; line-height: 1.0;
     letter-spacing: -0.8pt; margin: 0 0 8pt 0; color: var(--white);
   }
   .masthead .title .pro { color: var(--forge); }
   .masthead .welcome { color: var(--mist); font-size: 11pt; margin: 0; }
 
   /* === SECTION HEADERS === */
-  .section { margin: 0 0 6pt 0; }
+  .section { margin: 0 0 3pt 0; }
   .section-eyebrow {
     color: var(--forge); font-size: 8.5pt; font-weight: 700;
-    letter-spacing: 2.5pt; text-transform: uppercase; margin: 9pt 0 4pt 0;
+    letter-spacing: 2.5pt; text-transform: uppercase; margin: 6pt 0 3pt 0;
   }
   .section-title {
-    font-size: 14.5pt; font-weight: 900; color: var(--ink);
-    margin: 0 0 6pt 0; letter-spacing: -0.3pt; padding-bottom: 3pt;
+    font-size: 13.5pt; font-weight: 900; color: var(--ink);
+    margin: 0 0 4pt 0; letter-spacing: -0.3pt; padding-bottom: 2pt;
     border-bottom: 2pt solid var(--forge);
   }
 
   /* === NUMBERED STEPS === */
-  .step { display: flex; gap: 12pt; margin: 5pt 0; page-break-inside: avoid; }
+  .step { display: flex; gap: 12pt; margin: 3pt 0; page-break-inside: avoid; }
   .step-num {
     flex: 0 0 26pt; height: 26pt; background: var(--ink); color: var(--forge);
     font-weight: 900; font-size: 14pt; display: flex;
     align-items: center; justify-content: center;
   }
   .step-body { flex: 1; }
-  .step-title { font-weight: 800; color: var(--ink); font-size: 11.5pt; margin: 0 0 2pt 0; }
-  .step-desc { color: var(--ink2); font-size: 10.5pt; margin: 0; line-height: 1.4; }
+  .step-title { font-weight: 800; color: var(--ink); font-size: 11pt; margin: 0 0 2pt 0; }
+  .step-desc { color: var(--ink2); font-size: 10pt; margin: 0; line-height: 1.28; }
 
   /* === CALLOUTS === */
   .callout {
     background: var(--soft); border-left: 4pt solid var(--forge);
-    padding: 7pt 12pt; margin: 7pt 0; font-size: 9.5pt; color: var(--ink2);
+    padding: 7pt 12pt; margin: 5pt 0; font-size: 9.5pt; color: var(--ink2);
   }
   .callout.tip { border-left-color: var(--teal); background: #EDF7F3; }
   .callout-label {
@@ -97,7 +97,7 @@
   }
   .callout.tip .callout-label { color: var(--teal); }
 
-  p { margin: 0 0 6pt 0; }
+  p { margin: 0 0 4pt 0; }
   strong { color: var(--ink); font-weight: 700; }
   a { color: var(--forge); text-decoration: none; font-weight: 600; }
   .flow strong { color: var(--ink); }
@@ -149,19 +149,27 @@
 
     <div class="callout">
       <span class="callout-label">About API costs</span>
-      Claude's API is pay-per-use, billed by Anthropic directly. A typical generation costs about $0.05–0.25 depending on how many products you generate and which model is used. This is separate from your one-time Dashboard purchase.
+      Claude's API is pay-per-use, billed by Anthropic directly — a typical generation costs about $0.05–0.25 depending on product count and model, separate from your one-time Dashboard purchase.
     </div>
   </div>
 
   <div class="section">
     <div class="section-eyebrow">Make Something</div>
     <div class="section-title">Your First Collection</div>
-    <p class="flow">Fill in your niche, art style, AI image tool, collection name, and creative vision → click <strong>Generate</strong> → preview and edit your prompts and listings → download everything as a ZIP (Prompts CSV, Listings CSV, and Pinterest descriptions). The <strong>Prompt Player</strong> and <strong>Batch Scaler</strong> are built in for the steps that come after generating.</p>
+    <p class="flow">Fill in your niche, art style, AI image tool, collection name, and creative vision → click <strong>Generate</strong> → preview and edit your prompts and listings → download everything as a ZIP (Prompts CSV, Listings CSV, and Pinterest descriptions). Three built-in tools — below — handle the steps that come after generating.</p>
 
     <div class="callout tip">
       <span class="callout-label">✓ Free bonus included</span>
       Your purchase comes with the <strong>Brand Email Setup Guide</strong> — a comprehensive walkthrough for setting up a professional branded email address (e.g. hello@yourshop.com) using Cloudflare and Gmail, with no paid email hosting. Download it from your Gumroad receipt.
     </div>
+  </div>
+
+  <div class="section">
+    <div class="section-eyebrow">Built In</div>
+    <div class="section-title">Your Workflow Tools</div>
+    <p><strong>Prompt Player</strong> — load your Prompts CSV and copy each prompt with one click as you generate images, without losing your place.</p>
+    <p><strong>Batch Scaler</strong> — turn one master into every standard print size at 300 DPI (JPG, PDF, or both), each carrying an embedded Adobe RGB (1998) profile for accurate print-on-demand color, organized into folders and zipped.</p>
+    <p><strong>Mockup Studio</strong> — stage your prints in real rooms and export listing-ready hero images. Build your own room library (remembered between sessions, with Import/Export) from an included example pack; add your Claude key to unlock AI Room Match, which picks the best room for a print.</p>
   </div>
 
   <div class="section">
