@@ -1,0 +1,2397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=1024" />
+  <title>Batch Scaler</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: #0f0f0f; }
+    #root { min-height: 100vh; }
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+</head>
+<body>
+  <div id="root"></div>
+  <script>
+const {
+  useState,
+  useRef,
+  useEffect
+} = React;
+
+// ── DPI METADATA INJECTION ───────────────────────────────────────
+// canvas.toBlob() writes no DPI, so output reads as 72 DPI in
+// Photoshop/Photopea/Etsy preview. PNG uses a pHYs chunk; JPG patches
+// the JFIF APP0 segment. Pixel dimensions are unchanged either way.
+let dpiCrcTable = null;
+function dpiGetCrcTable() {
+  if (dpiCrcTable) return dpiCrcTable;
+  dpiCrcTable = new Uint32Array(256);
+  for (let i = 0; i < 256; i++) {
+    let c = i;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ c >>> 1 : c >>> 1;
+    dpiCrcTable[i] = c >>> 0;
+  }
+  return dpiCrcTable;
+}
+function dpiCrc32(bytes) {
+  const table = dpiGetCrcTable();
+  let crc = 0xFFFFFFFF;
+  for (let i = 0; i < bytes.length; i++) crc = crc >>> 8 ^ table[(crc ^ bytes[i]) & 0xFF];
+  return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+function injectPngDpi(buf, dpi) {
+  const bytes = new Uint8Array(buf);
+  const sig = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+  for (let i = 0; i < 8; i++) if (bytes[i] !== sig[i]) return buf;
+  const insertAt = 33;
+  const ppm = Math.round(dpi * 39.3701);
+  const phys = new Uint8Array(21);
+  phys[0] = 0;
+  phys[1] = 0;
+  phys[2] = 0;
+  phys[3] = 9;
+  phys[4] = 0x70;
+  phys[5] = 0x48;
+  phys[6] = 0x59;
+  phys[7] = 0x73;
+  phys[8] = ppm >>> 24 & 0xFF;
+  phys[9] = ppm >>> 16 & 0xFF;
+  phys[10] = ppm >>> 8 & 0xFF;
+  phys[11] = ppm & 0xFF;
+  phys[12] = ppm >>> 24 & 0xFF;
+  phys[13] = ppm >>> 16 & 0xFF;
+  phys[14] = ppm >>> 8 & 0xFF;
+  phys[15] = ppm & 0xFF;
+  phys[16] = 1;
+  const crc = dpiCrc32(phys.slice(4, 17));
+  phys[17] = crc >>> 24 & 0xFF;
+  phys[18] = crc >>> 16 & 0xFF;
+  phys[19] = crc >>> 8 & 0xFF;
+  phys[20] = crc & 0xFF;
+  const result = new Uint8Array(bytes.length + 21);
+  result.set(bytes.subarray(0, insertAt), 0);
+  result.set(phys, insertAt);
+  result.set(bytes.subarray(insertAt), insertAt + 21);
+  return result.buffer;
+}
+function injectJpgDpi(buf, dpi) {
+  const bytes = new Uint8Array(buf);
+  if (bytes[0] !== 0xFF || bytes[1] !== 0xD8) return buf;
+  if (bytes[2] !== 0xFF || bytes[3] !== 0xE0) return buf;
+  if (bytes[6] !== 0x4A || bytes[7] !== 0x46 || bytes[8] !== 0x49 || bytes[9] !== 0x46 || bytes[10] !== 0x00) return buf;
+  const result = new Uint8Array(bytes);
+  result[13] = 1;
+  result[14] = dpi >>> 8 & 0xFF;
+  result[15] = dpi & 0xFF;
+  result[16] = dpi >>> 8 & 0xFF;
+  result[17] = dpi & 0xFF;
+  return result.buffer;
+}
+async function injectDpiMetadata(blob, dpi, mimeType) {
+  if (!dpi || dpi <= 0) return blob;
+  const buf = await blob.arrayBuffer();
+  let patched;
+  if (mimeType === 'image/png') patched = injectPngDpi(buf, dpi);else if (mimeType === 'image/jpeg' || mimeType === 'image/jpg') patched = injectJpgDpi(buf, dpi);else return blob;
+  return new Blob([patched], {
+    type: mimeType
+  });
+}
+
+// ── ADOBE RGB (1998) COLOR EMBED ─────────────────────────────────
+// Lumaprints prints unpredictably from files with NO embedded color
+// profile, and canvas/Upscayl output is untagged sRGB. We convert each
+// resized output sRGB→Adobe RGB (1998) and embed a matching ICC profile so
+// every JPG (and the PDF built from it) carries proper wide-gamut color.
+// If pixel conversion can't run on a device, we still embed sRGB so a
+// profile is NEVER missing. The matrix + ICC were verified against lcms2
+// to agree to 0/255 levels. (The standalone Gumroad tool is unchanged.)
+const ADOBE_ICC_B64 = "AAACJERHRlACEAAAbW50clJHQiBYWVogB+oABgAdAAAAAAAAYWNzcAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAPbXAAEAAAAA00EAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAJZGVzYwAAAPAAAACEY3BydAAAAXQAAABQd3RwdAAAAcQAAAAUclhZWgAAAdgAAAAUZ1hZWgAAAewAAAAUYlhZWgAAAgAAAAAUclRSQwAAAhQAAAAQZ1RSQwAAAhQAAAAQYlRSQwAAAhQAAAAQZGVzYwAAAAAAAAApRGlnaXRhbEZvcmdlIEFkb2JlIFJHQiAoMTk5OCkgY29tcGF0aWJsZQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAdGV4dAAAAABQdWJsaWMgRG9tYWluLiBBZG9iZSBSR0IgKDE5OTgpIGNvbXBhdGlibGUuIEdlbmVyYXRlZCBieSBEaWdpdGFsRm9yZ2UuAABYWVogAAAAAAAA9tcAAQAAAADTQVhZWiAAAAAAAACcFwAAT6UAAAT8WFlaIAAAAAAAADSMAACgLAAAD5ZYWVogAAAAAAAAJjQAABAwAAC+r2N1cnYAAAAAAAAAAQIzAAA=";
+const SRGB_ICC_B64  = "AAACTGxjbXMEQAAAbW50clJHQiBYWVogB+oABgAdAA8AKgASYWNzcEFQUEwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPbWAAEAAAAA0y1sY21zAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAALZGVzYwAAAQgAAAA2Y3BydAAAAUAAAABMd3RwdAAAAYwAAAAUY2hhZAAAAaAAAAAsclhZWgAAAcwAAAAUYlhZWgAAAeAAAAAUZ1hZWgAAAfQAAAAUclRSQwAAAggAAAAgZ1RSQwAAAggAAAAgYlRSQwAAAggAAAAgY2hybQAAAigAAAAkbWx1YwAAAAAAAAABAAAADGVuVVMAAAAaAAAAHABzAFIARwBCACAAYgB1AGkAbAB0AC0AaQBuAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAADAAAAAcAE4AbwAgAGMAbwBwAHkAcgBpAGcAaAB0ACwAIAB1AHMAZQAgAGYAcgBlAGUAbAB5WFlaIAAAAAAAAPbWAAEAAAAA0y1zZjMyAAAAAAABDEIAAAXe///zJQAAB5MAAP2Q///7of///aIAAAPcAADAblhZWiAAAAAAAABvoAAAOPUAAAOQWFlaIAAAAAAAACSfAAAPhAAAtsNYWVogAAAAAAAAYpcAALeHAAAY2XBhcmEAAAAAAAMAAAACZmYAAPKnAAANWQAAE9AAAApbY2hybQAAAAAAAwAAAACj1wAAVHsAAEzNAACZmgAAJmYAAA9c";
+function _b64ToBytes(b64) {
+  const bin = atob(b64);
+  const u = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+  return u;
+}
+const ADOBE_ICC = _b64ToBytes(ADOBE_ICC_B64);
+const SRGB_ICC = _b64ToBytes(SRGB_ICC_B64);
+// sRGB-linear → AdobeRGB-linear (both D65; verified against lcms2)
+const _CM = [0.71512561, 0.28487439, 0.0, 0.0, 1.0, 0.0, 0.0, 0.04116195, 0.95883805];
+const _ADOBE_GAMMA = 563 / 256;
+const _s2l = new Float32Array(256);
+for (let i = 0; i < 256; i++) {
+  const c = i / 255;
+  _s2l[i] = c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+}
+const _ENC_N = 4096;
+const _l2a = new Uint8Array(_ENC_N + 1);
+for (let i = 0; i <= _ENC_N; i++) {
+  const v = i / _ENC_N;
+  _l2a[i] = Math.max(0, Math.min(255, Math.round(Math.pow(v, 1 / _ADOBE_GAMMA) * 255)));
+}
+function _encAdobe(v) {
+  if (v <= 0) return 0;
+  if (v >= 1) return 255;
+  return _l2a[(v * _ENC_N) | 0];
+}
+// Convert a whole canvas (RGBA) sRGB→AdobeRGB in place. Returns true on success.
+function convertCanvasToAdobeRGB(ctx, w, h) {
+  const img = ctx.getImageData(0, 0, w, h);
+  const d = img.data;
+  const m0 = _CM[0], m1 = _CM[1], m2 = _CM[2], m3 = _CM[3], m4 = _CM[4], m5 = _CM[5], m6 = _CM[6], m7 = _CM[7], m8 = _CM[8];
+  for (let i = 0; i < d.length; i += 4) {
+    const r = _s2l[d[i]], g = _s2l[d[i + 1]], b = _s2l[d[i + 2]];
+    d[i] = _encAdobe(m0 * r + m1 * g + m2 * b);
+    d[i + 1] = _encAdobe(m3 * r + m4 * g + m5 * b);
+    d[i + 2] = _encAdobe(m6 * r + m7 * g + m8 * b);
+  }
+  ctx.putImageData(img, 0, 0);
+  return true;
+}
+// Remove any APP2 ICC_PROFILE segments already present. Browser canvas encoders
+// (Chrome) embed their own sRGB profile, and a JPEG carrying two profiles is
+// ambiguous — some readers/labs then ignore both, silently losing our tagging.
+function stripJpgIcc(bytes) {
+  const keep = [bytes.subarray(0, 2)];
+  let i = 2;
+  while (i < bytes.length - 1) {
+    if (bytes[i] !== 0xFF) break;
+    const marker = bytes[i + 1];
+    if (marker === 0xD8) {
+      i += 2;
+      continue;
+    }
+    // standalone markers carry no length payload
+    if (marker === 0x01 || marker >= 0xD0 && marker <= 0xD7) {
+      keep.push(bytes.subarray(i, i + 2));
+      i += 2;
+      continue;
+    }
+    if (marker === 0xDA || marker === 0xD9) {
+      keep.push(bytes.subarray(i)); // SOS onward: entropy data, copy wholesale
+      i = bytes.length;
+      break;
+    }
+    const segLen = bytes[i + 2] << 8 | bytes[i + 3];
+    if (segLen < 2) break; // malformed; bail out safely
+    const isIcc = marker === 0xE2 && bytes[i + 4] === 0x49 && bytes[i + 5] === 0x43 && bytes[i + 6] === 0x43 && bytes[i + 7] === 0x5F && bytes[i + 8] === 0x50 && bytes[i + 9] === 0x52 && bytes[i + 10] === 0x4F && bytes[i + 11] === 0x46 && bytes[i + 12] === 0x49 && bytes[i + 13] === 0x4C && bytes[i + 14] === 0x45 && bytes[i + 15] === 0x00;
+    if (!isIcc) keep.push(bytes.subarray(i, i + 2 + segLen));
+    i += 2 + segLen;
+  }
+  if (i < bytes.length) keep.push(bytes.subarray(i));
+  let total = 0;
+  keep.forEach(k => total += k.length);
+  const out = new Uint8Array(total);
+  let off = 0;
+  keep.forEach(k => {
+    out.set(k, off);
+    off += k.length;
+  });
+  return out;
+}
+// Insert an APP2 ICC_PROFILE marker into a JFIF JPEG, after the APP0 segment.
+function injectJpgIcc(buf, iccBytes) {
+  const raw = new Uint8Array(buf);
+  if (raw[0] !== 0xFF || raw[1] !== 0xD8) return buf; // not a JPEG
+  const bytes = stripJpgIcc(raw); // ensure exactly ONE profile ends up in the file
+  let ins = 2;
+  if (bytes[2] === 0xFF && bytes[3] === 0xE0) {
+    const segLen = bytes[4] << 8 | bytes[5];
+    ins = 4 + segLen; // after APP0
+  }
+  const hdr = [0x49, 0x43, 0x43, 0x5F, 0x50, 0x52, 0x4F, 0x46, 0x49, 0x4C, 0x45, 0x00]; // "ICC_PROFILE\0"
+  const MAXP = 65519;
+  const total = Math.ceil(iccBytes.length / MAXP) || 1;
+  const parts = [];
+  for (let c = 0; c < total; c++) {
+    const chunk = iccBytes.subarray(c * MAXP, (c + 1) * MAXP);
+    const payloadLen = hdr.length + 2 + chunk.length;
+    const segLen = payloadLen + 2;
+    const seg = new Uint8Array(4 + payloadLen);
+    seg[0] = 0xFF;
+    seg[1] = 0xE2;
+    seg[2] = segLen >> 8 & 0xFF;
+    seg[3] = segLen & 0xFF;
+    seg.set(hdr, 4);
+    seg[16] = c + 1;
+    seg[17] = total;
+    seg.set(chunk, 18);
+    parts.push(seg);
+  }
+  let extra = 0;
+  parts.forEach(p => extra += p.length);
+  const out = new Uint8Array(bytes.length + extra);
+  out.set(bytes.subarray(0, ins), 0);
+  let off = ins;
+  parts.forEach(p => {
+    out.set(p, off);
+    off += p.length;
+  });
+  out.set(bytes.subarray(ins), off);
+  return out.buffer;
+}
+// Patch DPI then embed an ICC profile; always returns a JPEG blob.
+async function finalizeJpeg(blob, dpi, iccBytes) {
+  let buf = await blob.arrayBuffer();
+  if (dpi && dpi > 0) buf = injectJpgDpi(buf, dpi);
+  if (iccBytes) buf = injectJpgIcc(buf, iccBytes);
+  return new Blob([buf], {
+    type: 'image/jpeg'
+  });
+}
+// Tag a jsPDF document's color space via a PDF/X-style ICC OutputIntent, so the
+// embedded DeviceRGB JPEG is interpreted in the right space (Adobe RGB, or the
+// sRGB fallback) by color-managed viewers and print labs. Profile is embedded
+// uncompressed (no zlib dependency); jsPDF 2.5.x internal event hooks.
+function addPdfOutputIntent(doc, iccBytes) {
+  const internal = doc.internal;
+  const label = (iccBytes === ADOBE_ICC ? 'Adobe RGB (1998)' : 'sRGB IEC61966-2.1').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+  let bin = '';
+  for (let i = 0; i < iccBytes.length; i++) bin += String.fromCharCode(iccBytes[i]);
+  let iccId = null;
+  internal.events.subscribe('postPutResources', function () {
+    iccId = internal.newObject();
+    internal.out('<< /N 3 /Length ' + iccBytes.length + ' >>');
+    internal.out('stream');
+    internal.out(bin);
+    internal.out('endstream');
+    internal.out('endobj');
+  });
+  internal.events.subscribe('putCatalog', function () {
+    internal.out('/OutputIntents [ << /Type /OutputIntent /S /GTS_PDFX ' + '/OutputConditionIdentifier (' + label + ') ' + '/Info (' + label + ') ' + '/DestOutputProfile ' + iccId + ' 0 R >> ]');
+  });
+}
+
+// Simple emoji icon helper (keeps the build dependency-free)
+const Em = ({
+  children,
+  size = 16
+}) => /*#__PURE__*/React.createElement("span", {
+  style: {
+    fontSize: `${size}px`,
+    lineHeight: 1,
+    display: 'inline-block'
+  }
+}, children);
+// SPOONFLOWER TILE EXPORT: seamless square tiles -> PNG, sRGB, 150 DPI.
+const SPOONFLOWER_TILES = [2, 3, 4, 6, 8, 12, 18, 24].map(inch => ({ inch, label: inch + '×' + inch, px: inch * 150 }));
+function injectPngSrgb(buf) {
+  const bytes = new Uint8Array(buf);
+  const sig = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+  for (let i = 0; i < 8; i++) if (bytes[i] !== sig[i]) return bytes;
+  const insertAt = 33;
+  const chunk = new Uint8Array(13);
+  chunk[3] = 1; chunk[4] = 0x73; chunk[5] = 0x52; chunk[6] = 0x47; chunk[7] = 0x42; chunk[8] = 0;
+  const crc = dpiCrc32(chunk.slice(4, 9));
+  chunk[9] = crc >>> 24 & 0xFF; chunk[10] = crc >>> 16 & 0xFF; chunk[11] = crc >>> 8 & 0xFF; chunk[12] = crc & 0xFF;
+  const out = new Uint8Array(bytes.length + 13);
+  out.set(bytes.slice(0, insertAt), 0); out.set(chunk, insertAt); out.set(bytes.slice(insertAt), insertAt + 13);
+  return out;
+}
+async function resizeToSpoonflowerPng(imgEl, px, dpi) {
+  const canvas = document.createElement('canvas');
+  canvas.width = px; canvas.height = px;
+  const ctx = canvas.getContext('2d'); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(imgEl, 0, 0, px, px);
+  const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
+  canvas.width = 0; canvas.height = 0;
+  let buf = await blob.arrayBuffer(); buf = injectPngDpi(buf, dpi); buf = injectPngSrgb(buf);
+  return new Blob([buf], { type: 'image/png' });
+}
+// PNG PRINT OUTPUT: lossless 300-DPI PNG. Adobe RGB via iCCP when the browser
+// can deflate (CompressionStream), otherwise a clean sRGB-tagged PNG.
+async function deflateToZlib(bytes) {
+  const cs = new CompressionStream('deflate');
+  const w = cs.writable.getWriter(); w.write(bytes); w.close();
+  const chunks = []; const r = cs.readable.getReader();
+  for (;;) { const { value, done } = await r.read(); if (done) break; chunks.push(value); }
+  let n = 0; chunks.forEach(c => n += c.length);
+  const out = new Uint8Array(n); let o = 0; chunks.forEach(c => { out.set(c, o); o += c.length; });
+  return out;
+}
+async function injectPngIccp(buf, iccBytes, profileName) {
+  const bytes = new Uint8Array(buf);
+  const sig = [0x89,0x50,0x4E,0x47,0x0D,0x0A,0x1A,0x0A];
+  for (let i=0;i<8;i++) if (bytes[i]!==sig[i]) return bytes;
+  const comp = await deflateToZlib(new Uint8Array(iccBytes));
+  const nameBytes = []; for (let i=0;i<profileName.length;i++) nameBytes.push(profileName.charCodeAt(i)&0xFF);
+  const dataLen = nameBytes.length + 2 + comp.length;
+  const chunk = new Uint8Array(12 + dataLen);
+  chunk[0]=dataLen>>>24&0xFF; chunk[1]=dataLen>>>16&0xFF; chunk[2]=dataLen>>>8&0xFF; chunk[3]=dataLen&0xFF;
+  chunk[4]=0x69;chunk[5]=0x43;chunk[6]=0x43;chunk[7]=0x50;
+  let p=8; for (const b of nameBytes) chunk[p++]=b; chunk[p++]=0; chunk[p++]=0; chunk.set(comp,p); p+=comp.length;
+  const crc = dpiCrc32(chunk.slice(4, 8+dataLen));
+  chunk[p]=crc>>>24&0xFF; chunk[p+1]=crc>>>16&0xFF; chunk[p+2]=crc>>>8&0xFF; chunk[p+3]=crc&0xFF;
+  const insertAt=33;
+  const out = new Uint8Array(bytes.length + chunk.length);
+  out.set(bytes.slice(0,insertAt),0); out.set(chunk,insertAt); out.set(bytes.slice(insertAt),insertAt+chunk.length);
+  return out;
+}
+async function resizeToPngPrint(imgEl, w, h) {
+  const canvas=document.createElement('canvas'); canvas.width=w; canvas.height=h;
+  const ctx=canvas.getContext('2d'); ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality='high';
+  ctx.drawImage(imgEl,0,0,w,h);
+  let adobe=false;
+  if (typeof CompressionStream!=='undefined') { try { adobe=convertCanvasToAdobeRGB(ctx,w,h); } catch(e){ adobe=false; } }
+  const blob=await new Promise(r=>canvas.toBlob(r,'image/png'));
+  canvas.width=0;canvas.height=0;
+  let buf=await blob.arrayBuffer(); buf=injectPngDpi(buf,300);
+  try { buf = adobe ? await injectPngIccp(buf, ADOBE_ICC, 'Adobe RGB (1998)') : injectPngSrgb(buf); } catch(e){ buf = injectPngSrgb(buf); }
+  return new Blob([buf],{type:'image/png'});
+}
+const App = () => {
+  const [images, setImages] = useState({});
+  const [orig, setOrig] = useState(null); // Step 0 planning file: {src,width,height,name}
+  const [calcRatio, setCalcRatio] = useState('2:3');
+  const [calcOrient, setCalcOrient] = useState('portrait');
+  const [deselected, setDeselected] = useState({}); // key -> array of print sizes turned off
+  const [processing, setProcessing] = useState(false);
+  const [progress, setProgress] = useState({});
+  const [statusLabel, setStatusLabel] = useState({});
+  const [completed, setCompleted] = useState({});
+  const [previews, setPreviews] = useState([]);
+  const [showPreview, setShowPreview] = useState(false);
+  const [previewData, setPreviewData] = useState(null);
+  const [draggedOver, setDraggedOver] = useState(null);
+  const [outputFormat, setOutputFormat] = useState({ jpg: true, png: false, pdf: true }); // any combination of jpg/png/pdf
+  const [spoonStatus, setSpoonStatus] = useState('');
+  const [spoonBusy, setSpoonBusy] = useState(false);
+  const [spoonDpi, setSpoonDpi] = useState(150);
+  const fileInputRefs = useRef({});
+  const generatedFilesRef = useRef({});
+  const handleDragOver = (e, ratio, orientation) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDraggedOver(`${ratio}-${orientation}`);
+  };
+  const handleDragLeave = () => setDraggedOver(null);
+  const handleDrop = (e, ratio, orientation) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDraggedOver(null);
+    if (e.dataTransfer.files?.length > 0) {
+      handleImageSelect(ratio, orientation, e.dataTransfer.files);
+    }
+  };
+  const aspectRatios = {
+    '2:3': {
+      label: '2:3',
+      portrait: [{
+        print: '4×6',
+        width: 1200,
+        height: 1800
+      }, {
+        print: '8×12',
+        width: 2400,
+        height: 3600
+      }, {
+        print: '12×18',
+        width: 3600,
+        height: 5400
+      }, {
+        print: '16×24',
+        width: 4800,
+        height: 7200
+      }, {
+        print: '20×30',
+        width: 6000,
+        height: 9000
+      }, {
+        print: '24×36',
+        width: 7200,
+        height: 10800
+      }, {
+        print: '30×45',
+        width: 9000,
+        height: 13500
+      }],
+      landscape: [{
+        print: '6×4',
+        width: 1800,
+        height: 1200
+      }, {
+        print: '12×8',
+        width: 3600,
+        height: 2400
+      }, {
+        print: '18×12',
+        width: 5400,
+        height: 3600
+      }, {
+        print: '24×16',
+        width: 7200,
+        height: 4800
+      }, {
+        print: '30×20',
+        width: 9000,
+        height: 6000
+      }, {
+        print: '36×24',
+        width: 10800,
+        height: 7200
+      }, {
+        print: '45×30',
+        width: 13500,
+        height: 9000
+      }]
+    },
+    '3:4': {
+      label: '3:4',
+      portrait: [{
+        print: '6×8',
+        width: 1800,
+        height: 2400
+      }, {
+        print: '9×12',
+        width: 2700,
+        height: 3600
+      }, {
+        print: '12×16',
+        width: 3600,
+        height: 4800
+      }, {
+        print: '18×24',
+        width: 5400,
+        height: 7200
+      }],
+      landscape: [{
+        print: '8×6',
+        width: 2400,
+        height: 1800
+      }, {
+        print: '12×9',
+        width: 3600,
+        height: 2700
+      }, {
+        print: '16×12',
+        width: 4800,
+        height: 3600
+      }, {
+        print: '24×18',
+        width: 7200,
+        height: 5400
+      }]
+    },
+    '4:5': {
+      label: '4:5',
+      portrait: [{
+        print: '8×10',
+        width: 2400,
+        height: 3000
+      }, {
+        print: '16×20 (Ribba)',
+        width: 4800,
+        height: 6000
+      }],
+      landscape: [{
+        print: '10×8',
+        width: 3000,
+        height: 2400
+      }, {
+        print: '20×16 (Ribba)',
+        width: 6000,
+        height: 4800
+      }]
+    },
+    '5:7': {
+      label: '5:7',
+      portrait: [{
+        print: '5×7',
+        width: 1500,
+        height: 2100
+      }, {
+        print: '10×14',
+        width: 3000,
+        height: 4200
+      }],
+      landscape: [{
+        print: '7×5',
+        width: 2100,
+        height: 1500
+      }, {
+        print: '14×10',
+        width: 4200,
+        height: 3000
+      }]
+    },
+    '11:14': {
+      label: '11:14',
+      portrait: [{
+        print: '11×14',
+        width: 3300,
+        height: 4200
+      }],
+      landscape: [{
+        print: '14×11',
+        width: 4200,
+        height: 3300
+      }]
+    },
+    'ISO-A': {
+      label: 'ISO A',
+      portrait: [{
+        print: 'A4',
+        width: 2480,
+        height: 3508
+      }, {
+        print: 'A3',
+        width: 3508,
+        height: 4961
+      }, {
+        print: 'A2',
+        width: 4961,
+        height: 7016
+      }, {
+        print: 'A1',
+        width: 7016,
+        height: 9933
+      }],
+      landscape: [{
+        print: 'A4L',
+        width: 3508,
+        height: 2480
+      }, {
+        print: 'A3L',
+        width: 4961,
+        height: 3508
+      }, {
+        print: 'A2L',
+        width: 7016,
+        height: 4961
+      }, {
+        print: 'A1L',
+        width: 9933,
+        height: 7016
+      }]
+    },
+    '1:1': {
+      label: '1:1 (Square)',
+      square: [{
+        print: '4×4',
+        width: 1200,
+        height: 1200
+      }, {
+        print: '5×5',
+        width: 1500,
+        height: 1500
+      }, {
+        print: '6×6',
+        width: 1800,
+        height: 1800
+      }, {
+        print: '8×8',
+        width: 2400,
+        height: 2400
+      }, {
+        print: '10×10',
+        width: 3000,
+        height: 3000
+      }, {
+        print: '12×12',
+        width: 3600,
+        height: 3600
+      }, {
+        print: '16×16',
+        width: 4800,
+        height: 4800
+      }, {
+        print: '20×20',
+        width: 6000,
+        height: 6000
+      }, {
+        print: '24×24',
+        width: 7200,
+        height: 7200
+      }, {
+        print: '30×30',
+        width: 9000,
+        height: 9000
+      }]
+    }
+  };
+
+  // Which orientations a ratio actually defines (square ratios use 'square')
+  const orientationsOf = spec => ['portrait', 'landscape', 'square'].filter(o => Array.isArray(spec[o]));
+  const handleImageSelect = (ratio, orientation, fileList) => {
+    if (!fileList || fileList.length === 0) return;
+    Array.from(fileList).forEach(file => {
+      const reader = new FileReader();
+      reader.onload = e => {
+        const img = new Image();
+        img.onload = () => {
+          setImages(prev => {
+            const existing = prev[ratio]?.[orientation] || [];
+            const entry = {
+              id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+              src: e.target.result,
+              name: file.name,
+              width: img.width,
+              height: img.height
+            };
+            return {
+              ...prev,
+              [ratio]: {
+                ...prev[ratio],
+                [orientation]: [...existing, entry]
+              }
+            };
+          });
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+  const handleRemoveImage = (ratio, orientation, id) => {
+    setImages(prev => {
+      const existing = prev[ratio]?.[orientation] || [];
+      const filtered = existing.filter(i => i.id !== id);
+      const updated = {
+        ...prev[ratio],
+        [orientation]: filtered
+      };
+      if (filtered.length === 0) delete updated[orientation];
+      return {
+        ...prev,
+        [ratio]: updated
+      };
+    });
+  };
+
+  // Step 0 — read the original file and auto-detect the closest ratio/orientation
+  const handleOrigSelect = fileList => {
+    const file = fileList?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        setOrig({
+          src: e.target.result,
+          width: img.width,
+          height: img.height,
+          name: file.name
+        });
+        const orient = img.width > img.height ? 'landscape' : 'portrait';
+        const srcAspect = img.width / img.height;
+        let best = '2:3',
+          bestDiff = Infinity,
+          bestOrient = orient;
+        Object.entries(aspectRatios).forEach(([r, spec]) => {
+          if (spec.square) {
+            const diff = Math.abs(srcAspect - 1);
+            if (diff < bestDiff) {
+              bestDiff = diff;
+              best = r;
+              bestOrient = 'square';
+            }
+          } else {
+            const s0 = spec.portrait[0];
+            const portraitAspect = s0.width / s0.height; // < 1
+            const cmp = orient === 'portrait' ? portraitAspect : 1 / portraitAspect;
+            const diff = Math.abs(srcAspect - cmp);
+            if (diff < bestDiff) {
+              bestDiff = diff;
+              best = r;
+              bestOrient = orient;
+            }
+          }
+        });
+        setCalcRatio(best);
+        setCalcOrient(bestOrient);
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  };
+  const getMaxSize = (ratio, orientation) => {
+    const sizes = aspectRatios[ratio][orientation];
+    return sizes[sizes.length - 1];
+  };
+
+  // Smallest master dimensions in a ratio/orientation group (per-dimension min),
+  // so a size we mark eligible can be produced cleanly by EVERY image in the group.
+  const groupMinDims = (ratio, orientation) => {
+    const list = images[ratio]?.[orientation] || [];
+    if (list.length === 0) return null;
+    return {
+      w: Math.min(...list.map(i => i.width)),
+      h: Math.min(...list.map(i => i.height))
+    };
+  };
+
+  // A size is eligible only if the master is at least that big (no upscaling, ever).
+  const isSizeEligible = (ratio, orientation, size) => {
+    const min = groupMinDims(ratio, orientation);
+    if (!min) return false;
+    return min.w >= size.width && min.h >= size.height;
+  };
+
+  // Sizes that will actually export: eligible AND not unchecked by the user.
+  const selectedSizes = (ratio, orientation) => {
+    const key = `${ratio}-${orientation}`;
+    const off = deselected[key] || [];
+    return aspectRatios[ratio][orientation].filter(s => isSizeEligible(ratio, orientation, s) && !off.includes(s.print));
+  };
+  const toggleSize = (ratio, orientation, printName) => {
+    const key = `${ratio}-${orientation}`;
+    setDeselected(prev => {
+      const cur = prev[key] || [];
+      const next = cur.includes(printName) ? cur.filter(p => p !== printName) : [...cur, printName];
+      return {
+        ...prev,
+        [key]: next
+      };
+    });
+  };
+  const sanitizeName = name => name.replace(/\.[^/.]+$/, '').replace(/[^a-zA-Z0-9-_]/g, '-').slice(0, 40) || 'image';
+  const loadScript = src => new Promise((resolve, reject) => {
+    // If the library is already present (inlined build), skip the network fetch.
+    if (src.includes('jszip') && window.JSZip) {
+      resolve();
+      return;
+    }
+    if (src.includes('jspdf') && (window.jspdf || window.jsPDF)) {
+      resolve();
+      return;
+    }
+    if (document.querySelector(`script[src="${src}"]`)) {
+      resolve();
+      return;
+    }
+    const s = document.createElement('script');
+    s.src = src;
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error(`Failed to load ${src}`));
+    document.head.appendChild(s);
+  });
+  const loadImageEl = src => new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
+  });
+  const blobToDataURL = blob => new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result);
+    r.onerror = reject;
+    r.readAsDataURL(blob);
+  });
+  const withTimeout = (promise, ms, msg) => Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error(msg)), ms))]);
+  const resizeToBlob = (imgEl, w, h) => new Promise((resolve, reject) => {
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, w, h);
+      ctx.drawImage(imgEl, 0, 0, w, h);
+      // Convert sRGB→Adobe RGB (1998) before encoding. If it can't run on
+      // this device, fall back to embedding sRGB so a profile is never missing.
+      let useAdobe = false;
+      try {
+        useAdobe = convertCanvasToAdobeRGB(ctx, w, h);
+      } catch (e) {
+        useAdobe = false;
+      }
+      canvas.toBlob(blob => {
+        canvas.width = 0;
+        canvas.height = 0;
+        if (!blob) {
+          reject(new Error('Canvas export returned null (size too large for this device)'));
+          return;
+        }
+        // Embed 300 DPI (pixels unchanged) + the matching ICC color profile.
+        const icc = useAdobe ? ADOBE_ICC : SRGB_ICC;
+        finalizeJpeg(blob, 300, icc).then(fb => resolve({
+          blob: fb,
+          iccBytes: icc
+        })).catch(() => resolve({
+          blob,
+          iccBytes: icc
+        }));
+      }, 'image/jpeg', 0.95);
+    } catch (err) {
+      reject(err);
+    }
+  });
+  const createPDFBlob = async (jpgBlob, wPx, hPx, iccBytes) => {
+    const {
+      jsPDF
+    } = window.jspdf;
+    const mmW = wPx / 300 * 25.4;
+    const mmH = hPx / 300 * 25.4;
+    const orientation = mmW > mmH ? 'l' : 'p';
+    const doc = new jsPDF({
+      orientation,
+      unit: 'mm',
+      format: [mmW, mmH],
+      compress: true
+    });
+    // Tag the PDF's color space (Adobe RGB, or sRGB fallback) so the embedded
+    // DeviceRGB JPEG is interpreted correctly by color-managed viewers/print labs.
+    if (iccBytes) addPdfOutputIntent(doc, iccBytes);
+    const dataUrl = await blobToDataURL(jpgBlob);
+    doc.addImage(dataUrl, 'JPEG', 0, 0, mmW, mmH, undefined, 'FAST');
+    return doc.output('blob');
+  };
+  const generatePreview = () => {
+    const hasImages = Object.values(images).some(r => r?.portrait?.length > 0 || r?.landscape?.length > 0);
+    if (!hasImages) {
+      alert('Please upload at least one master image');
+      return;
+    }
+    const preview = {
+      folders: [],
+      totalFiles: 0,
+      totalImages: 0,
+      warnings: [],
+      excludedCount: 0,
+      deselectedCount: 0
+    };
+    Object.entries(aspectRatios).forEach(([ratio, spec]) => {
+      orientationsOf(spec).forEach(orientation => {
+        const list = images[ratio]?.[orientation];
+        if (!list || list.length === 0) return;
+        const orientLabel = orientation.charAt(0).toUpperCase() + orientation.slice(1);
+        const folderPath = `${ratio.replace(':', '-')}-${orientLabel}`;
+        const chosen = selectedSizes(ratio, orientation);
+        const allSizes = spec[orientation];
+        const excluded = allSizes.filter(s => !chosen.some(c => c.print === s.print));
+        // Two very different reasons a size is excluded:
+        //  - tooBig: the master is smaller than this size (we never upscale)
+        //  - deselected: eligible, but the user unchecked it (their choice)
+        const tooBig = excluded.filter(s => !isSizeEligible(ratio, orientation, s));
+        const deselected = excluded.filter(s => isSizeEligible(ratio, orientation, s));
+        preview.excludedCount += tooBig.length;
+        preview.deselectedCount += deselected.length;
+        if (chosen.length === 0) {
+          const min = groupMinDims(ratio, orientation);
+          preview.warnings.push({
+            text: `${ratio} ${orientLabel}: master is only ${min.w}×${min.h}px — too small for any size in this ratio. Nothing will export. Upscale your master first.`
+          });
+          return; // no folder created for this group
+        }
+        preview.folders.push({
+          name: folderPath,
+          imageSubfolders: list.map(d => ({
+            name: sanitizeName(d.name),
+            sizes: chosen.map(s => s.print)
+          })),
+          imageCount: list.length
+        });
+        preview.totalFiles += list.length * chosen.length; // size-units; ×format applied at display
+        preview.totalImages += list.length;
+        if (tooBig.length > 0) {
+          const min = groupMinDims(ratio, orientation);
+          preview.warnings.push({
+            text: `${ratio} ${orientLabel}: skipping ${tooBig.map(s => s.print).join(', ')} — ${tooBig.length > 1 ? 'these sizes are' : 'this size is'} larger than your ${min.w}×${min.h}px master (this tool never upscales).`
+          });
+        }
+      });
+    });
+    setPreviewData(preview);
+    setShowPreview(true);
+  };
+  const confirmAndProcess = async () => {
+    if (!outputFormat.jpg && !outputFormat.png && !outputFormat.pdf) { alert('Pick at least one output format (JPG, PNG, or PDF).'); return; }
+    setShowPreview(false);
+    await processAllImages();
+  };
+  const processAllImages = async () => {
+    setProcessing(true);
+    setCompleted({});
+    setProgress({});
+    setStatusLabel({});
+    setPreviews([]);
+    generatedFilesRef.current = {};
+    const skipped = [];
+    try {
+      await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+      const groups = [];
+      Object.entries(aspectRatios).forEach(([ratio, spec]) => {
+        orientationsOf(spec).forEach(orientation => {
+          const list = images[ratio]?.[orientation];
+          if (!list || list.length === 0) return;
+          groups.push({
+            ratio,
+            orientation,
+            spec,
+            list
+          });
+        });
+      });
+      for (const group of groups) {
+        const {
+          ratio,
+          orientation,
+          list
+        } = group;
+        const orientLabel = orientation.charAt(0).toUpperCase() + orientation.slice(1);
+        const ratioFolder = `${ratio.replace(':', '-')}-${orientLabel}`;
+        const key = `${ratio}-${orientation}`;
+        const sizesList = selectedSizes(ratio, orientation); // eligible + user-selected only
+        if (sizesList.length === 0) continue;
+        const totalSteps = list.length * sizesList.length;
+        let step = 0;
+        const generated = [];
+        const meta = [];
+        for (const d of list) {
+          const imgFolder = sanitizeName(d.name);
+          // No upscaling in this version — downsample from the master only.
+          const imgEl = await loadImageEl(d.src);
+          for (const size of sizesList) {
+            const base = `${imgFolder}_${size.print.replace('×', 'x')}_${size.width}x${size.height}`;
+            setStatusLabel(prev => ({
+              ...prev,
+              [key]: `Generating ${size.print}…`
+            }));
+            await new Promise(r => setTimeout(r, 0));
+            try {
+              // JPG is produced when JPG or PDF is wanted (the PDF embeds it).
+              let jpgBlob = null, iccBytes = null;
+              if (outputFormat.jpg || outputFormat.pdf) {
+                const jpgResult = await withTimeout(resizeToBlob(imgEl, size.width, size.height), 60000, `${size.print} timed out — likely too large for this device`);
+                jpgBlob = jpgResult.blob; iccBytes = jpgResult.iccBytes;
+              }
+              let pdfBlob = null;
+              if (outputFormat.pdf) {
+                pdfBlob = await withTimeout(createPDFBlob(jpgBlob, size.width, size.height, iccBytes), 60000, `${size.print} PDF timed out — likely too large for this device`);
+              }
+              let pngBlob = null;
+              if (outputFormat.png) {
+                pngBlob = await withTimeout(resizeToPngPrint(imgEl, size.width, size.height), 60000, `${size.print} PNG timed out — likely too large for this device`);
+              }
+              generated.push({
+                ratioFolder,
+                imageFolder: imgFolder,
+                jpgFilename: `${base}.jpg`,
+                jpgBlob,
+                pngFilename: `${base}.png`,
+                pngBlob,
+                pdfFilename: `${base}.pdf`,
+                pdfBlob
+              });
+              meta.push({
+                imageFolder: imgFolder,
+                printSize: size.print
+              });
+            } catch (e) {
+              skipped.push(`${ratio} ${orientLabel} "${d.name}" ${size.print}: ${e.message}`);
+            }
+            step++;
+            setProgress(prev => ({
+              ...prev,
+              [key]: Math.round(step / totalSteps * 100)
+            }));
+            await new Promise(r => setTimeout(r, 0));
+          }
+          setStatusLabel(prev => ({
+            ...prev,
+            [key]: ''
+          }));
+        }
+        generatedFilesRef.current[key] = generated;
+        setCompleted(prev => ({
+          ...prev,
+          [key]: meta
+        }));
+      }
+      const perItem = (outputFormat.jpg ? 1 : 0) + (outputFormat.png ? 1 : 0) + (outputFormat.pdf ? 1 : 0);
+      const totalFiles = Object.values(generatedFilesRef.current).reduce((s, a) => s + a.length * perItem, 0);
+
+      // Build an inline preview gallery showing ONE thumbnail per image (not the
+      // first N files, which would all be the same image at different sizes since
+      // each image is generated across all its sizes before the next image starts).
+      // Use data URLs because some sandboxes block blob: URLs in <img>.
+      const previewItems = [];
+      for (const arr of Object.values(generatedFilesRef.current)) {
+        const seenImages = new Set();
+        for (const f of arr) {
+          if (previewItems.length >= 12) break;
+          if (seenImages.has(f.imageFolder)) continue; // one thumbnail per image
+          seenImages.add(f.imageFolder);
+          const durl = await blobToDataURL(f.jpgBlob || f.pngBlob);
+          previewItems.push({
+            name: f.jpgFilename,
+            url: durl
+          });
+        }
+        if (previewItems.length >= 12) break;
+      }
+      setPreviews(previewItems);
+      const fmtLabel = [outputFormat.jpg && 'JPG', outputFormat.png && 'PNG', outputFormat.pdf && 'PDF'].filter(Boolean).join(' + ') || 'none';
+      let msg = `✓ Done! Generated ${totalFiles} files (${fmtLabel}). Click "Download ZIP" to save.`;
+      if (skipped.length > 0) {
+        msg += `\n\n⚠️ ${skipped.length} size(s) were skipped (too large for this device — try a desktop/laptop):\n` + skipped.slice(0, 8).join('\n');
+      }
+      alert(msg);
+    } catch (error) {
+      alert(`Error during processing: ${error.message}`);
+    }
+    setProcessing(false);
+  };
+  const generateSpoonflower = async () => {
+    const tiles = images['1:1'] && images['1:1']['square'] || [];
+    if (tiles.length === 0) { setSpoonStatus('Drop a seamless square tile into the 1:1 (Square) box above first.'); return; }
+    if (typeof window.JSZip === 'undefined') { try { await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js'); } catch (e) {} }
+    const Zip = window.JSZip; if (!Zip) { setSpoonStatus('Could not load the zip library.'); return; }
+    setSpoonBusy(true);
+    try {
+      const zip = new Zip(); const root = zip.folder('Spoonflower_Tiles'); const upscaledSizes = new Set();
+      for (const t of tiles) {
+        const imgEl = await loadImageEl(t.src); const name = sanitizeName(t.name); const sub = root.folder(name);
+        const srcPx = Math.min(imgEl.naturalWidth || imgEl.width || 0, imgEl.naturalHeight || imgEl.height || 0);
+        for (const sz of SPOONFLOWER_TILES) {
+          const px = Math.round(sz.inch * spoonDpi);
+          const up = srcPx > 0 && px > srcPx;
+          if (up) upscaledSizes.add(sz.inch);
+          setSpoonStatus(t.name + ': ' + sz.label + '″' + (up ? ' (upscaled)' : '') + '…');
+          await new Promise(r => setTimeout(r, 0));
+          const png = await resizeToSpoonflowerPng(imgEl, px, spoonDpi);
+          sub.file(name + '_' + sz.label.replace('×', 'x') + 'in_' + px + 'px_' + spoonDpi + 'dpi' + (up ? '_UPSCALED' : '') + '.png', png);
+        }
+      }
+      const blob = await zip.generateAsync({ type: 'blob' });
+      const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'Spoonflower_Tiles.zip';
+      document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000);
+      let doneMsg = '✓ Done! ' + (tiles.length * SPOONFLOWER_TILES.length) + ' PNG tiles (sRGB, ' + spoonDpi + ' DPI) in Spoonflower_Tiles.zip.';
+      if (upscaledSizes.size) { doneMsg += '  ⚠ Upscaled from your tile (softer, filenames tagged _UPSCALED): ' + Array.from(upscaledSizes).sort((a, b) => a - b).join('″, ') + '″. Check these before printing large.'; }
+      setSpoonStatus(doneMsg);
+    } catch (e) { setSpoonStatus('Error: ' + (e.message || e)); } finally { setSpoonBusy(false); }
+  };
+  const downloadAllAsZip = async () => {
+    const allFiles = Object.values(generatedFilesRef.current).flat();
+    if (allFiles.length === 0) {
+      alert('No generated files found. Run Generate first.');
+      return;
+    }
+    try {
+      await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js');
+      const zip = new window.JSZip();
+      const root = zip.folder('Prints-300dpi');
+      allFiles.forEach(f => {
+        const folder = root.folder(f.ratioFolder).folder(f.imageFolder);
+        if (outputFormat.jpg && f.jpgBlob) folder.file(f.jpgFilename, f.jpgBlob);
+        if (outputFormat.png && f.pngBlob) folder.file(f.pngFilename, f.pngBlob);
+        if (outputFormat.pdf && f.pdfBlob) folder.file(f.pdfFilename, f.pdfBlob);
+      });
+      const blob = await zip.generateAsync({
+        type: 'blob'
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const pad = n => String(n).padStart(2, '0');
+      const now = new Date();
+      const stamp = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+      a.download = `Prints-300dpi_${stamp}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      alert(`Error building ZIP: ${error.message}`);
+    }
+  };
+  const UploadCard = ({
+    ratio,
+    spec,
+    orientation
+  }) => {
+    const isPortrait = orientation === 'portrait';
+    const aspectRatio = orientation === 'square' ? '1/1' : ratio === '2:3' || ratio === '5:7' ? isPortrait ? '2/3' : '3/2' : ratio === '3:4' ? isPortrait ? '3/4' : '4/3' : ratio === '4:5' ? isPortrait ? '4/5' : '5/4' : isPortrait ? '11/14' : '14/11';
+    const list = images[ratio]?.[orientation] || [];
+    const has = list.length > 0;
+    const dragged = draggedOver === `${ratio}-${orientation}`;
+    const sizes = spec[orientation];
+    return /*#__PURE__*/React.createElement("div", {
+      onDragOver: e => handleDragOver(e, ratio, orientation),
+      onDragLeave: handleDragLeave,
+      onDrop: e => handleDrop(e, ratio, orientation),
+      style: {
+        background: dragged ? '#2a2a2a' : '#222',
+        border: dragged ? '2px solid #10b981' : has ? '1px solid #fbbf24' : '1px solid #333',
+        borderRadius: '8px',
+        padding: '1.5rem',
+        transition: 'all 0.3s ease',
+        boxShadow: has ? '0 0 20px rgba(251,191,36,0.1)' : dragged ? '0 0 20px rgba(16,185,129,0.2)' : 'none'
+      }
+    }, /*#__PURE__*/React.createElement("input", {
+      ref: el => {
+        fileInputRefs.current[`${ratio}-${orientation}`] = el;
+      },
+      type: "file",
+      accept: "image/*",
+      multiple: true,
+      style: {
+        display: 'none'
+      },
+      onChange: e => handleImageSelect(ratio, orientation, e.target.files)
+    }), /*#__PURE__*/React.createElement("div", {
+      style: {
+        marginBottom: '1rem'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: '0.875rem',
+        color: '#fbbf24',
+        fontWeight: 600,
+        marginBottom: '0.5rem'
+      }
+    }, spec.label), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: '0.75rem',
+        color: '#666'
+      }
+    }, sizes.length, " sizes", has ? ` · ${list.length} image${list.length !== 1 ? 's' : ''}` : '')), has && /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(60px, 1fr))',
+        gap: '0.5rem',
+        marginBottom: '1rem'
+      }
+    }, list.map(img => /*#__PURE__*/React.createElement("div", {
+      key: img.id,
+      style: {
+        position: 'relative',
+        background: '#1a1a1a',
+        borderRadius: '4px',
+        overflow: 'hidden',
+        aspectRatio
+      }
+    }, /*#__PURE__*/React.createElement("img", {
+      src: img.src,
+      style: {
+        width: '100%',
+        height: '100%',
+        objectFit: 'cover'
+      }
+    }), /*#__PURE__*/React.createElement("button", {
+      onClick: e => {
+        e.stopPropagation();
+        handleRemoveImage(ratio, orientation, img.id);
+      },
+      style: {
+        position: 'absolute',
+        top: '2px',
+        right: '2px',
+        width: '18px',
+        height: '18px',
+        borderRadius: '50%',
+        background: 'rgba(0,0,0,0.7)',
+        color: '#fff',
+        border: 'none',
+        cursor: 'pointer',
+        fontSize: '0.7rem',
+        lineHeight: 1,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 0
+      },
+      title: "Remove"
+    }, "\u2715")))), /*#__PURE__*/React.createElement("div", {
+      onClick: () => fileInputRefs.current[`${ratio}-${orientation}`]?.click(),
+      style: {
+        background: dragged ? '#2a3a2a' : '#1a1a1a',
+        border: dragged ? '2px dashed #10b981' : '1px dashed #444',
+        borderRadius: '4px',
+        padding: has ? '0.75rem' : '2rem',
+        textAlign: 'center',
+        marginBottom: '0.75rem',
+        cursor: 'pointer',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '0.5rem',
+        transition: 'all 0.3s'
+      }
+    }, /*#__PURE__*/React.createElement(Em, {
+      size: has ? 18 : 24
+    }, "\u2B06\uFE0F"), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: '0.8rem',
+        color: dragged ? '#10b981' : has ? '#999' : '#777'
+      }
+    }, dragged ? 'Drop to add' : has ? 'Add more' : 'Click or drag images')), has && /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: '0.875rem',
+        color: '#fbbf24',
+        fontWeight: 500,
+        display: 'flex',
+        alignItems: 'center',
+        gap: '0.5rem',
+        marginBottom: '1rem'
+      }
+    }, /*#__PURE__*/React.createElement(Em, null, "\u2713"), list.length, " loaded"), has && (() => {
+      const min = groupMinDims(ratio, orientation);
+      const off = deselected[`${ratio}-${orientation}`] || [];
+      const eligibleCount = sizes.filter(s => isSizeEligible(ratio, orientation, s) && !off.includes(s.print)).length;
+      return /*#__PURE__*/React.createElement("div", {
+        style: {
+          background: '#161616',
+          border: '1px solid #2a2a2a',
+          borderRadius: '6px',
+          padding: '0.75rem'
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: '0.72rem',
+          color: '#888',
+          marginBottom: '0.5rem'
+        }
+      }, "Output sizes \u2014 based on your smallest master ", /*#__PURE__*/React.createElement("strong", {
+        style: {
+          color: '#aaa'
+        }
+      }, min.w, "\xD7", min.h, "px"), " (", eligibleCount, " will export)"), sizes.map(s => {
+        const eligible = isSizeEligible(ratio, orientation, s);
+        const checked = eligible && !off.includes(s.print);
+        return /*#__PURE__*/React.createElement("label", {
+          key: s.print,
+          style: {
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            padding: '0.2rem 0',
+            cursor: eligible ? 'pointer' : 'default',
+            opacity: eligible ? 1 : 0.45
+          },
+          title: eligible ? '' : `Needs a master at least ${s.width}×${s.height}px`
+        }, /*#__PURE__*/React.createElement("input", {
+          type: "checkbox",
+          checked: checked,
+          disabled: !eligible,
+          onChange: () => toggleSize(ratio, orientation, s.print),
+          style: {
+            accentColor: '#fbbf24',
+            width: '15px',
+            height: '15px'
+          }
+        }), /*#__PURE__*/React.createElement("span", {
+          style: {
+            fontSize: '0.78rem',
+            color: eligible ? '#ddd' : '#888',
+            minWidth: '52px'
+          }
+        }, s.print), /*#__PURE__*/React.createElement("span", {
+          style: {
+            fontSize: '0.68rem',
+            color: '#666',
+            fontFamily: 'monospace'
+          }
+        }, s.width, "\xD7", s.height), !eligible && /*#__PURE__*/React.createElement("span", {
+          style: {
+            fontSize: '0.65rem',
+            color: '#c77',
+            marginLeft: 'auto'
+          }
+        }, "too big"));
+      }));
+    })());
+  };
+  const referenceData = [{
+    ratio: '2:3',
+    sizes: [{
+      print: '4×6',
+      p: '1200 × 1800',
+      l: '1800 × 1200'
+    }, {
+      print: '8×12',
+      p: '2400 × 3600',
+      l: '3600 × 2400'
+    }, {
+      print: '12×18',
+      p: '3600 × 5400',
+      l: '5400 × 3600'
+    }, {
+      print: '16×24',
+      p: '4800 × 7200',
+      l: '7200 × 4800'
+    }, {
+      print: '20×30',
+      p: '6000 × 9000',
+      l: '9000 × 6000'
+    }, {
+      print: '24×36',
+      p: '7200 × 10800',
+      l: '10800 × 7200'
+    }, {
+      print: '30×45',
+      p: '9000 × 13500',
+      l: '13500 × 9000'
+    }]
+  }, {
+    ratio: '3:4',
+    sizes: [{
+      print: '6×8',
+      p: '1800 × 2400',
+      l: '2400 × 1800'
+    }, {
+      print: '9×12',
+      p: '2700 × 3600',
+      l: '3600 × 2700'
+    }, {
+      print: '12×16',
+      p: '3600 × 4800',
+      l: '4800 × 3600'
+    }, {
+      print: '18×24',
+      p: '5400 × 7200',
+      l: '7200 × 5400'
+    }]
+  }, {
+    ratio: '4:5',
+    sizes: [{
+      print: '8×10',
+      p: '2400 × 3000',
+      l: '3000 × 2400'
+    }, {
+      print: '16×20 (Ribba)',
+      p: '4800 × 6000',
+      l: '6000 × 4800'
+    }]
+  }, {
+    ratio: '5:7',
+    sizes: [{
+      print: '5×7',
+      p: '1500 × 2100',
+      l: '2100 × 1500'
+    }, {
+      print: '10×14',
+      p: '3000 × 4200',
+      l: '4200 × 3000'
+    }]
+  }, {
+    ratio: '11:14',
+    sizes: [{
+      print: '11×14',
+      p: '3300 × 4200',
+      l: '4200 × 3300'
+    }]
+  }, {
+    ratio: 'ISO A',
+    sizes: [{
+      print: 'A4',
+      p: '2480 × 3508',
+      l: '3508 × 2480'
+    }, {
+      print: 'A3',
+      p: '3508 × 4961',
+      l: '4961 × 3508'
+    }, {
+      print: 'A2',
+      p: '4961 × 7016',
+      l: '7016 × 4961'
+    }, {
+      print: 'A1',
+      p: '7016 × 9933',
+      l: '9933 × 7016'
+    }]
+  }, {
+    ratio: '1:1 (Square)',
+    sizes: [{
+      print: '4×4',
+      p: '1200 × 1200',
+      l: '1200 × 1200'
+    }, {
+      print: '5×5',
+      p: '1500 × 1500',
+      l: '1500 × 1500'
+    }, {
+      print: '6×6',
+      p: '1800 × 1800',
+      l: '1800 × 1800'
+    }, {
+      print: '8×8',
+      p: '2400 × 2400',
+      l: '2400 × 2400'
+    }, {
+      print: '10×10',
+      p: '3000 × 3000',
+      l: '3000 × 3000'
+    }, {
+      print: '12×12',
+      p: '3600 × 3600',
+      l: '3600 × 3600'
+    }, {
+      print: '16×16',
+      p: '4800 × 4800',
+      l: '4800 × 4800'
+    }, {
+      print: '20×20',
+      p: '6000 × 6000',
+      l: '6000 × 6000'
+    }, {
+      print: '24×24',
+      p: '7200 × 7200',
+      l: '7200 × 7200'
+    }, {
+      print: '30×30',
+      p: '9000 × 9000',
+      l: '9000 × 9000'
+    }]
+  }];
+  const anyImages = Object.values(images).some(r => r?.portrait?.length > 0 || r?.landscape?.length > 0 || r?.square?.length > 0);
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: 'linear-gradient(135deg,#0f0f0f 0%,#1a1a1a 100%)',
+      minHeight: '100vh',
+      padding: '2rem',
+      fontFamily: '"Sohne", "Helvetica Neue", sans-serif',
+      color: '#fff'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      maxWidth: '1200px',
+      margin: '0 auto'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: '2rem'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '1rem',
+      marginBottom: '1rem'
+    }
+  }, /*#__PURE__*/React.createElement(Em, {
+    size: 32
+  }, "\u26A1"), /*#__PURE__*/React.createElement("h1", {
+    style: {
+      fontSize: '2.5rem',
+      fontWeight: 600,
+      margin: 0
+    }
+  }, "Batch Scaler")), /*#__PURE__*/React.createElement("p", {
+    style: {
+      fontSize: '1rem',
+      color: '#999',
+      margin: 0
+    }
+  }, "Slice one master into every print size \u2014 JPG + PDF at 300dpi, organized and zipped. Built for desktop/laptop.")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: '#241f13',
+      border: '1px solid #4a3a1f',
+      borderRadius: '8px',
+      padding: '1.25rem 1.5rem',
+      marginBottom: '1.5rem',
+      display: 'flex',
+      alignItems: 'flex-start',
+      gap: '0.75rem'
+    }
+  }, /*#__PURE__*/React.createElement(Em, {
+    size: 20
+  }, "\uD83C\uDFAF"), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("p", {
+    style: {
+      margin: '0 0 0.4rem 0',
+      fontSize: '0.875rem',
+      color: '#fbbf24',
+      fontWeight: 600
+    }
+  }, "Upscale first, then slice & dice"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      margin: 0,
+      fontSize: '0.875rem',
+      color: '#cdb',
+      lineHeight: 1.6
+    }
+  }, "This tool ", /*#__PURE__*/React.createElement("strong", null, "downsamples only \u2014 it never upscales"), ". Upscale your master once (Upscayl, Topaz, etc.) to at least the largest size you want to sell, then drop it in. Each ratio shows exactly which sizes your master can produce; sizes bigger than your master are disabled. For the full range up to 30\xD745 / A1, use a master around ", /*#__PURE__*/React.createElement("strong", null, "9000\u201313500px"), " on the long edge."))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: '#1a2419',
+      border: '1px solid #2d4a2b',
+      borderRadius: '8px',
+      padding: '1.25rem 1.5rem',
+      marginBottom: '2rem',
+      display: 'flex',
+      alignItems: 'flex-start',
+      gap: '0.75rem'
+    }
+  }, /*#__PURE__*/React.createElement(Em, {
+    size: 20
+  }, "\u2601\uFE0F"), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("p", {
+    style: {
+      margin: '0 0 0.4rem 0',
+      fontSize: '0.875rem',
+      color: '#6ee7a8',
+      fontWeight: 600
+    }
+  }, "How it works"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      margin: 0,
+      fontSize: '0.875rem',
+      color: '#bcd',
+      lineHeight: 1.6
+    }
+  }, "Upload masters, generate every print size as JPG + PDF, then download a single ZIP with the full folder structure. To transfer to the cloud, unzip it directly into your local ", /*#__PURE__*/React.createElement("strong", null, "Google Drive for desktop"), " folder \u2014 it syncs automatically, accessible from any device."))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: '#15171c',
+      border: '1px solid #2a3340',
+      borderRadius: '8px',
+      padding: '1.5rem',
+      marginBottom: '2.5rem'
+    }
+  }, /*#__PURE__*/React.createElement("h2", {
+    style: {
+      fontSize: '1.15rem',
+      fontWeight: 600,
+      color: '#9ec5fe',
+      margin: '0 0 0.4rem 0'
+    }
+  }, "\uD83E\uDDEE Step 0 \u2014 Plan Your Upscale (optional)"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      fontSize: '0.85rem',
+      color: '#999',
+      margin: '0 0 1rem 0',
+      lineHeight: 1.5
+    }
+  }, "Upload your ", /*#__PURE__*/React.createElement("strong", null, "original"), " (pre-upscale) AI file. The tool reads its dimensions and tells you the exact upscale factor to reach each print size \u2014 so you know what to set in Upscayl/Topaz before producing your master."), !orig ? /*#__PURE__*/React.createElement("div", {
+    onClick: () => fileInputRefs.current['__orig']?.click(),
+    onDragOver: e => {
+      e.preventDefault();
+      e.stopPropagation();
+    },
+    onDrop: e => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.dataTransfer.files?.length) handleOrigSelect(e.dataTransfer.files);
+    },
+    style: {
+      background: '#1a1a1a',
+      border: '1px dashed #3a4658',
+      borderRadius: '6px',
+      padding: '1.5rem',
+      textAlign: 'center',
+      cursor: 'pointer',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      gap: '0.5rem'
+    }
+  }, /*#__PURE__*/React.createElement(Em, {
+    size: 22
+  }, "\u2B06\uFE0F"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: '0.85rem',
+      color: '#888'
+    }
+  }, "Click or drag your original small file")) : /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '1rem',
+      flexWrap: 'wrap',
+      marginBottom: '1rem'
+    }
+  }, /*#__PURE__*/React.createElement("img", {
+    src: orig.src,
+    style: {
+      width: '54px',
+      height: '54px',
+      objectFit: 'cover',
+      borderRadius: '4px',
+      border: '1px solid #333'
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: '0.85rem',
+      color: '#ddd'
+    }
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, orig.name)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: '#9ec5fe',
+      fontFamily: 'monospace'
+    }
+  }, orig.width, " \xD7 ", orig.height, "px")), /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      setOrig(null);
+    },
+    style: {
+      marginLeft: 'auto',
+      background: '#374151',
+      color: '#fff',
+      border: 'none',
+      borderRadius: '4px',
+      padding: '0.4rem 0.8rem',
+      fontSize: '0.78rem',
+      cursor: 'pointer'
+    }
+  }, "Change file")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: '0.75rem',
+      flexWrap: 'wrap',
+      marginBottom: '1rem'
+    }
+  }, /*#__PURE__*/React.createElement("label", {
+    style: {
+      fontSize: '0.8rem',
+      color: '#999',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '0.25rem'
+    }
+  }, "Target ratio", /*#__PURE__*/React.createElement("select", {
+    value: calcRatio,
+    onChange: e => {
+      const r = e.target.value;
+      setCalcRatio(r);
+      const os = orientationsOf(aspectRatios[r]);
+      if (!os.includes(calcOrient)) setCalcOrient(os[0]);
+    },
+    style: {
+      background: '#1a1a1a',
+      color: '#fff',
+      border: '1px solid #3a4658',
+      borderRadius: '4px',
+      padding: '0.4rem'
+    }
+  }, Object.entries(aspectRatios).map(([r, s]) => /*#__PURE__*/React.createElement("option", {
+    key: r,
+    value: r
+  }, s.label)))), /*#__PURE__*/React.createElement("label", {
+    style: {
+      fontSize: '0.8rem',
+      color: '#999',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '0.25rem'
+    }
+  }, "Orientation", /*#__PURE__*/React.createElement("select", {
+    value: orientationsOf(aspectRatios[calcRatio]).includes(calcOrient) ? calcOrient : orientationsOf(aspectRatios[calcRatio])[0],
+    onChange: e => setCalcOrient(e.target.value),
+    style: {
+      background: '#1a1a1a',
+      color: '#fff',
+      border: '1px solid #3a4658',
+      borderRadius: '4px',
+      padding: '0.4rem'
+    }
+  }, orientationsOf(aspectRatios[calcRatio]).map(o => /*#__PURE__*/React.createElement("option", {
+    key: o,
+    value: o
+  }, o.charAt(0).toUpperCase() + o.slice(1)))))), (() => {
+    const orients = orientationsOf(aspectRatios[calcRatio]);
+    const useOrient = orients.includes(calcOrient) ? calcOrient : orients[0];
+    const sizes = aspectRatios[calcRatio][useOrient];
+    const largest = sizes[sizes.length - 1];
+    const maxFactor = Math.max(largest.width / orig.width, largest.height / orig.height);
+    return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+      style: {
+        background: '#13202e',
+        border: '1px solid #2d4a6b',
+        borderRadius: '6px',
+        padding: '0.9rem 1rem',
+        marginBottom: '1rem',
+        fontSize: '0.85rem',
+        color: '#bcd',
+        lineHeight: 1.5
+      }
+    }, maxFactor <= 1 ? /*#__PURE__*/React.createElement(React.Fragment, null, "\u2705 Your file is already large enough for every size in ", calcRatio, " ", useOrient, " \u2014 no upscaling needed.") : /*#__PURE__*/React.createElement(React.Fragment, null, "\uD83C\uDFAF To make ", /*#__PURE__*/React.createElement("strong", null, "every"), " ", calcRatio, " ", useOrient, " size, upscale to at least ", /*#__PURE__*/React.createElement("strong", {
+      style: {
+        color: '#9ec5fe'
+      }
+    }, maxFactor.toFixed(1), "\xD7"), " \u2192 about ", /*#__PURE__*/React.createElement("strong", {
+      style: {
+        color: '#9ec5fe',
+        fontFamily: 'monospace'
+      }
+    }, Math.ceil(orig.width * maxFactor), "\xD7", Math.ceil(orig.height * maxFactor), "px"), ". For only smaller prints, a lower factor is fine (see table).")), /*#__PURE__*/React.createElement("div", {
+      style: {
+        overflowX: 'auto'
+      }
+    }, /*#__PURE__*/React.createElement("table", {
+      style: {
+        width: '100%',
+        borderCollapse: 'collapse',
+        fontSize: '0.82rem'
+      }
+    }, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", {
+      style: {
+        background: '#1a1a1a',
+        borderBottom: '1px solid #2d4a6b'
+      }
+    }, /*#__PURE__*/React.createElement("th", {
+      style: {
+        padding: '0.5rem 0.75rem',
+        textAlign: 'left',
+        color: '#9ec5fe'
+      }
+    }, "Print size"), /*#__PURE__*/React.createElement("th", {
+      style: {
+        padding: '0.5rem 0.75rem',
+        textAlign: 'center',
+        color: '#9ec5fe'
+      }
+    }, "Target px (300dpi)"), /*#__PURE__*/React.createElement("th", {
+      style: {
+        padding: '0.5rem 0.75rem',
+        textAlign: 'center',
+        color: '#9ec5fe'
+      }
+    }, "Upscale factor needed"))), /*#__PURE__*/React.createElement("tbody", null, sizes.map((s, i) => {
+      const f = Math.max(s.width / orig.width, s.height / orig.height);
+      return /*#__PURE__*/React.createElement("tr", {
+        key: s.print,
+        style: {
+          background: i % 2 === 0 ? '#16181d' : '#15171c',
+          borderBottom: '1px solid #222'
+        }
+      }, /*#__PURE__*/React.createElement("td", {
+        style: {
+          padding: '0.5rem 0.75rem',
+          color: '#ddd'
+        }
+      }, s.print), /*#__PURE__*/React.createElement("td", {
+        style: {
+          padding: '0.5rem 0.75rem',
+          textAlign: 'center',
+          color: '#aaa',
+          fontFamily: 'monospace'
+        }
+      }, s.width, "\xD7", s.height), /*#__PURE__*/React.createElement("td", {
+        style: {
+          padding: '0.5rem 0.75rem',
+          textAlign: 'center',
+          fontWeight: 600,
+          color: f <= 1 ? '#6ee7a8' : '#fbbf24',
+          fontFamily: 'monospace'
+        }
+      }, f <= 1 ? 'none (downsize)' : `${f.toFixed(1)}×`));
+    })))), /*#__PURE__*/React.createElement("p", {
+      style: {
+        fontSize: '0.72rem',
+        color: '#667',
+        marginTop: '0.75rem',
+        marginBottom: 0,
+        lineHeight: 1.5
+      }
+    }, "Upscalers offer fixed steps (2\xD7, 4\xD7, and higher on Upscayl desktop). Pick the next step at or above the factor you need \u2014 the slicer trims any excess at no quality cost. Your original should already be close to the target aspect ratio."));
+  })()), /*#__PURE__*/React.createElement("input", {
+    ref: el => {
+      fileInputRefs.current['__orig'] = el;
+    },
+    type: "file",
+    accept: "image/*",
+    style: {
+      display: 'none'
+    },
+    onChange: e => handleOrigSelect(e.target.files)
+  })), /*#__PURE__*/React.createElement("h2", {
+    style: {
+      fontSize: '1.5rem',
+      fontWeight: 600,
+      color: '#fbbf24',
+      marginBottom: '1.5rem',
+      paddingBottom: '1rem',
+      borderBottom: '2px solid #fbbf24'
+    }
+  }, "\uD83D\uDCF7 Portrait Masters"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+      gap: '1.5rem',
+      marginBottom: '3rem'
+    }
+  }, Object.entries(aspectRatios).filter(([, s]) => s.portrait).map(([k, s]) => /*#__PURE__*/React.createElement(UploadCard, {
+    key: k,
+    ratio: k,
+    spec: s,
+    orientation: "portrait"
+  }))), /*#__PURE__*/React.createElement("h2", {
+    style: {
+      fontSize: '1.5rem',
+      fontWeight: 600,
+      color: '#fbbf24',
+      marginBottom: '1.5rem',
+      paddingBottom: '1rem',
+      borderBottom: '2px solid #fbbf24'
+    }
+  }, "\uD83C\uDF05 Landscape Masters"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+      gap: '1.5rem',
+      marginBottom: '3rem'
+    }
+  }, Object.entries(aspectRatios).filter(([, s]) => s.landscape).map(([k, s]) => /*#__PURE__*/React.createElement(UploadCard, {
+    key: k,
+    ratio: k,
+    spec: s,
+    orientation: "landscape"
+  }))), /*#__PURE__*/React.createElement("h2", {
+    style: {
+      fontSize: '1.5rem',
+      fontWeight: 600,
+      color: '#fbbf24',
+      marginBottom: '1.5rem',
+      paddingBottom: '1rem',
+      borderBottom: '2px solid #fbbf24'
+    }
+  }, "\u2B1B Square Masters"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+      gap: '1.5rem',
+      marginBottom: '2rem'
+    }
+  }, Object.entries(aspectRatios).filter(([, s]) => s.square).map(([k, s]) => /*#__PURE__*/React.createElement(UploadCard, {
+    key: k,
+    ratio: k,
+    spec: s,
+    orientation: "square"
+  }))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: '1rem',
+      marginBottom: '3rem',
+      justifyContent: 'center'
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: generatePreview,
+    disabled: processing || !anyImages,
+    style: {
+      background: '#fbbf24',
+      color: '#000',
+      border: 'none',
+      padding: '1rem 2rem',
+      borderRadius: '6px',
+      fontWeight: 600,
+      fontSize: '1rem',
+      cursor: 'pointer',
+      opacity: processing || !anyImages ? 0.5 : 1
+    }
+  }, processing ? 'Processing…' : 'Generate files')), /*#__PURE__*/React.createElement("div", { style: { maxWidth: '540px', margin: '0 auto 3rem', padding: '1.25rem 1.5rem', background: '#1c1c1c', border: '1px solid #333', borderRadius: '8px', textAlign: 'center' } }, /*#__PURE__*/React.createElement("div", { style: { fontWeight: 600, marginBottom: '0.35rem', color: '#fff' } }, "🧵 Spoonflower tile export"), /*#__PURE__*/React.createElement("div", { style: { fontSize: '0.8rem', color: '#9ca3af', lineHeight: 1.5, marginBottom: '0.9rem' } }, "Turns a seamless square tile (dropped in the 1:1 Square box above) into seamless sRGB PNGs at 2″-24″, at your chosen DPI. Sizes larger than your tile are still exported but tagged _UPSCALED (softer). Your design must already tile seamlessly."), /*#__PURE__*/React.createElement("div", { style: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginBottom: '0.9rem', fontSize: '0.82rem', color: '#ddd', flexWrap: 'wrap' } }, /*#__PURE__*/React.createElement("span", null, "Output DPI:"), /*#__PURE__*/React.createElement("select", { value: spoonDpi, onChange: e => setSpoonDpi(parseInt(e.target.value, 10)), style: { background: '#0f0f0f', color: '#fff', border: '1px solid #444', borderRadius: '5px', padding: '0.3rem 0.5rem', fontSize: '0.82rem' } }, /*#__PURE__*/React.createElement("option", { value: 150 }, "150 — Spoonflower, Prinfab, Fabric on Demand"), /*#__PURE__*/React.createElement("option", { value: 300 }, "300 — Little Cocalico & most others"))), /*#__PURE__*/React.createElement("button", { onClick: generateSpoonflower, disabled: spoonBusy, style: { background: '#10b981', color: '#00110b', border: 'none', padding: '0.7rem 1.4rem', borderRadius: '6px', fontWeight: 600, fontSize: '0.9rem', cursor: spoonBusy ? 'default' : 'pointer', opacity: spoonBusy ? 0.6 : 1 } }, spoonBusy ? 'Generating…' : 'Export Spoonflower tiles (ZIP)'), spoonStatus && /*#__PURE__*/React.createElement("div", { style: { marginTop: '0.75rem', fontSize: '0.82rem', color: spoonStatus.charAt(0) === '✓' ? '#10b981' : (spoonStatus.indexOf('Error') === 0 ? '#f87171' : '#9ca3af') } }, spoonStatus)), showPreview && previewData && /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: 'fixed',
+      inset: 0,
+      background: 'rgba(0,0,0,0.8)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 1000,
+      padding: '2rem'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: '#1a1a1a',
+      border: '2px solid #fbbf24',
+      borderRadius: '12px',
+      padding: '2rem',
+      maxWidth: '700px',
+      maxHeight: '80vh',
+      overflowY: 'auto',
+      color: '#fff'
+    }
+  }, /*#__PURE__*/React.createElement("h2", {
+    style: {
+      fontSize: '1.5rem',
+      fontWeight: 600,
+      color: '#fbbf24',
+      margin: '0 0 1.5rem 0'
+    }
+  }, "\uD83D\uDCCB Preview"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: '#222',
+      border: '1px solid #333',
+      borderRadius: '8px',
+      padding: '1rem',
+      marginBottom: '1.5rem',
+      display: 'grid',
+      gridTemplateColumns: 'repeat(3, 1fr)',
+      gap: '1rem'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: 'center'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: '2rem',
+      fontWeight: 600,
+      color: '#fbbf24'
+    }
+  }, previewData.totalImages), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: '0.75rem',
+      color: '#999'
+    }
+  }, "Images")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: 'center'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: '2rem',
+      fontWeight: 600,
+      color: '#fbbf24'
+    }
+  }, previewData.folders.length), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: '0.75rem',
+      color: '#999'
+    }
+  }, "Ratio Folders")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: 'center'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: '2rem',
+      fontWeight: 600,
+      color: '#fbbf24'
+    }
+  }, previewData.totalFiles * ((outputFormat.jpg ? 1 : 0) + (outputFormat.png ? 1 : 0) + (outputFormat.pdf ? 1 : 0))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: '0.75rem',
+      color: '#999'
+    }
+  }, "Files"))), previewData.excludedCount > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: '#241f13',
+      border: '1px solid #4a3a1f',
+      borderRadius: '6px',
+      padding: '0.9rem 1rem',
+      marginBottom: '1rem',
+      fontSize: '0.85rem',
+      color: '#fbbf24'
+    }
+  }, "\uD83C\uDFAF ", previewData.excludedCount, " size(s) skipped \u2014 larger than your master (this tool never upscales)."), previewData.deselectedCount > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: '#16201a',
+      border: '1px solid #2c4a3a',
+      borderRadius: '6px',
+      padding: '0.9rem 1rem',
+      marginBottom: '1rem',
+      fontSize: '0.85rem',
+      color: '#7fd1a8'
+    }
+  }, "\u2713 ", previewData.deselectedCount, " size(s) not exported \u2014 you deselected them."), previewData.warnings.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: '1.5rem'
+    }
+  }, previewData.warnings.map((w, i) => /*#__PURE__*/React.createElement("div", {
+    key: i,
+    style: {
+      background: '#332',
+      border: '1px solid #ff9800',
+      borderRadius: '6px',
+      padding: '0.75rem 1rem',
+      marginBottom: '0.5rem',
+      fontSize: '0.82rem',
+      color: '#ffce80'
+    }
+  }, "\u26A0\uFE0F ", w.text))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: '#222',
+      border: '1px solid #333',
+      borderRadius: '8px',
+      padding: '1.5rem',
+      marginBottom: '1.5rem',
+      fontFamily: 'monospace',
+      fontSize: '0.8rem',
+      maxHeight: '280px',
+      overflowY: 'auto',
+      color: '#bbb'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: '1rem',
+      color: '#fbbf24',
+      fontWeight: 600
+    }
+  }, "Prints-300dpi/"), previewData.folders.map((folder, idx) => /*#__PURE__*/React.createElement("div", {
+    key: idx,
+    style: {
+      marginLeft: '1.5rem',
+      marginBottom: '1rem'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: '#fbbf24',
+      marginBottom: '0.5rem'
+    }
+  }, "\u2514\u2500 ", folder.name, "/"), folder.imageSubfolders.map((f, i) => /*#__PURE__*/React.createElement("div", {
+    key: i,
+    style: {
+      marginLeft: '1.5rem',
+      marginBottom: '0.5rem'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: '#9ec5fe',
+      marginBottom: '0.25rem'
+    }
+  }, "\u251C\u2500 ", f.name, "/"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginLeft: '1.5rem',
+      color: '#888',
+      fontSize: '0.72rem'
+    }
+  }, f.sizes.length, " sizes \xD7 ", ('(' + [outputFormat.jpg && 'jpg', outputFormat.png && 'png', outputFormat.pdf && 'pdf'].filter(Boolean).join(' + ') + ')'))))))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '0.75rem',
+      flexWrap: 'wrap',
+      marginBottom: '1.25rem'
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: '0.9rem',
+      color: '#ddd',
+      fontWeight: 600
+    }
+  }, "Output format:"), /*#__PURE__*/React.createElement("div", { style: { display: 'flex', gap: '0.9rem', alignItems: 'center', flexWrap: 'wrap' } }, /*#__PURE__*/React.createElement("label", { style: { display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.85rem', color: '#ddd', cursor: 'pointer' } }, /*#__PURE__*/React.createElement("input", { type: 'checkbox', checked: outputFormat.jpg, onChange: e => setOutputFormat(f => Object.assign({}, f, { jpg: e.target.checked })) }), "JPG"), /*#__PURE__*/React.createElement("label", { style: { display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.85rem', color: '#ddd', cursor: 'pointer' } }, /*#__PURE__*/React.createElement("input", { type: 'checkbox', checked: outputFormat.png, onChange: e => setOutputFormat(f => Object.assign({}, f, { png: e.target.checked })) }), "PNG"), /*#__PURE__*/React.createElement("label", { style: { display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.85rem', color: '#ddd', cursor: 'pointer' } }, /*#__PURE__*/React.createElement("input", { type: 'checkbox', checked: outputFormat.pdf, onChange: e => setOutputFormat(f => Object.assign({}, f, { pdf: e.target.checked })) }), "PDF")), /*#__PURE__*/React.createElement("span", { style: { fontSize: '0.75rem', color: '#888', flex: '1 1 220px' } }, "All at 300 DPI. JPG & PDF carry Adobe RGB; PNG is lossless (Adobe RGB where supported, otherwise sRGB). Pick any combination.")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: '1rem',
+      justifyContent: 'flex-end'
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => setShowPreview(false),
+    style: {
+      padding: '0.75rem 1.5rem',
+      background: '#374151',
+      color: '#fff',
+      border: 'none',
+      borderRadius: '6px',
+      fontWeight: 500,
+      cursor: 'pointer'
+    }
+  }, "\u2715 Cancel"), /*#__PURE__*/React.createElement("button", {
+    onClick: confirmAndProcess,
+    style: {
+      padding: '0.75rem 2rem',
+      background: '#fbbf24',
+      color: '#000',
+      border: 'none',
+      borderRadius: '6px',
+      fontWeight: 600,
+      cursor: 'pointer'
+    }
+  }, "\u2713 Confirm & Process")))), (Object.keys(progress).length > 0 || Object.keys(completed).length > 0) && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: '#222',
+      border: '1px solid #333',
+      borderRadius: '8px',
+      padding: '2rem',
+      marginBottom: '2rem'
+    }
+  }, /*#__PURE__*/React.createElement("h2", {
+    style: {
+      fontSize: '1.25rem',
+      fontWeight: 600,
+      marginBottom: '1.5rem'
+    }
+  }, "Processing Status"), Object.entries(aspectRatios).map(([ratio, spec]) => {
+    const hasP = images[ratio]?.portrait?.length > 0;
+    const hasL = images[ratio]?.landscape?.length > 0;
+    const hasSq = images[ratio]?.square?.length > 0;
+    if (!hasP && !hasL && !hasSq) return null;
+    const rows = [];
+    if (hasP) rows.push(['portrait', 'Portrait']);
+    if (hasL) rows.push(['landscape', 'Landscape']);
+    if (hasSq) rows.push(['square', 'Square']);
+    return /*#__PURE__*/React.createElement("div", {
+      key: ratio
+    }, rows.map(([orient, label]) => {
+      const k = `${ratio}-${orient}`;
+      const prog = progress[k] || 0;
+      const done = completed[k];
+      const lbl = statusLabel[k];
+      return /*#__PURE__*/React.createElement("div", {
+        key: k,
+        style: {
+          marginBottom: '1.5rem'
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
+          display: 'flex',
+          justifyContent: 'space-between',
+          marginBottom: '0.75rem'
+        }
+      }, /*#__PURE__*/React.createElement("span", {
+        style: {
+          fontWeight: 500
+        }
+      }, spec.label, " \u2014 ", label), /*#__PURE__*/React.createElement("span", {
+        style: {
+          color: '#fbbf24',
+          fontSize: '0.875rem'
+        }
+      }, lbl ? lbl : done ? '✓ Complete' : `${prog}%`)), /*#__PURE__*/React.createElement("div", {
+        style: {
+          background: '#1a1a1a',
+          borderRadius: '4px',
+          height: '8px'
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
+          background: '#fbbf24',
+          height: '100%',
+          width: `${prog}%`,
+          transition: 'width 0.3s'
+        }
+      })));
+    }));
+  }), Object.keys(completed).length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: '2rem',
+      paddingTop: '2rem',
+      borderTop: '1px solid #333'
+    }
+  }, /*#__PURE__*/React.createElement("h3", {
+    style: {
+      fontSize: '1rem',
+      fontWeight: 600,
+      marginBottom: '1rem'
+    }
+  }, "Downloads"), /*#__PURE__*/React.createElement("button", {
+    onClick: downloadAllAsZip,
+    style: {
+      background: '#10b981',
+      color: '#fff',
+      border: 'none',
+      padding: '0.75rem 1.5rem',
+      borderRadius: '6px',
+      fontWeight: 500,
+      cursor: 'pointer',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '0.5rem'
+    }
+  }, /*#__PURE__*/React.createElement(Em, null, "\u2B07\uFE0F"), "Download ZIP"), previews.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: '1.5rem'
+    }
+  }, /*#__PURE__*/React.createElement("p", {
+    style: {
+      margin: '0 0 0.75rem 0',
+      fontSize: '0.875rem',
+      color: '#9ec5fe',
+      fontWeight: 600
+    }
+  }, "\u2705 Generated preview (sample of actual output)"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))',
+      gap: '0.75rem'
+    }
+  }, previews.map((p, i) => /*#__PURE__*/React.createElement("div", {
+    key: i,
+    style: {
+      background: '#1a1a1a',
+      border: '1px solid #333',
+      borderRadius: '6px',
+      overflow: 'hidden'
+    }
+  }, /*#__PURE__*/React.createElement("img", {
+    src: p.url,
+    style: {
+      width: '100%',
+      height: '90px',
+      objectFit: 'cover',
+      display: 'block'
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: '0.6rem',
+      color: '#888',
+      padding: '0.25rem 0.4rem',
+      whiteSpace: 'nowrap',
+      overflow: 'hidden',
+      textOverflow: 'ellipsis'
+    },
+    title: p.name
+  }, p.name)))), /*#__PURE__*/React.createElement("p", {
+    style: {
+      margin: '0.75rem 0 0 0',
+      fontSize: '0.75rem',
+      color: '#666'
+    }
+  }, "On iPad/iPhone the ZIP download may not trigger (iOS limitation). Use a desktop/laptop \u2014 or your deployed site \u2014 to download the full set.")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: '#222',
+      border: '1px solid #333',
+      borderRadius: '8px',
+      padding: '1.5rem',
+      marginTop: '1rem'
+    }
+  }, /*#__PURE__*/React.createElement("p", {
+    style: {
+      margin: '0 0 0.5rem 0',
+      fontSize: '0.875rem',
+      color: '#fbbf24',
+      fontWeight: 600
+    }
+  }, "\uD83D\uDCA1 Cloud Sync Tip"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      margin: 0,
+      fontSize: '0.875rem',
+      color: '#ccc',
+      lineHeight: 1.6
+    }
+  }, "Unzip directly into your local ", /*#__PURE__*/React.createElement("strong", null, "Google Drive for desktop"), " folder to sync to the cloud automatically.")))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: '#1a1a1a',
+      border: '1px solid #333',
+      borderRadius: '8px',
+      padding: '2rem',
+      marginTop: '3rem'
+    }
+  }, /*#__PURE__*/React.createElement("h3", {
+    style: {
+      fontSize: '1.25rem',
+      fontWeight: 600,
+      color: '#fbbf24',
+      margin: '0 0 1.5rem 0'
+    }
+  }, "\uD83D\uDCCA Print Size Reference (300 DPI)"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      overflowX: 'auto'
+    }
+  }, /*#__PURE__*/React.createElement("table", {
+    style: {
+      width: '100%',
+      borderCollapse: 'collapse',
+      fontSize: '0.875rem'
+    }
+  }, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", {
+    style: {
+      background: '#222',
+      borderBottom: '2px solid #fbbf24'
+    }
+  }, /*#__PURE__*/React.createElement("th", {
+    style: {
+      padding: '1rem',
+      textAlign: 'left',
+      color: '#fbbf24',
+      fontWeight: 600
+    }
+  }, "Aspect Ratio"), /*#__PURE__*/React.createElement("th", {
+    style: {
+      padding: '1rem',
+      textAlign: 'left',
+      color: '#fbbf24',
+      fontWeight: 600
+    }
+  }, "Print Size"), /*#__PURE__*/React.createElement("th", {
+    style: {
+      padding: '1rem',
+      textAlign: 'center',
+      color: '#fbbf24',
+      fontWeight: 600
+    }
+  }, "Portrait (W \xD7 H px)"), /*#__PURE__*/React.createElement("th", {
+    style: {
+      padding: '1rem',
+      textAlign: 'center',
+      color: '#fbbf24',
+      fontWeight: 600
+    }
+  }, "Landscape (W \xD7 H px)"))), /*#__PURE__*/React.createElement("tbody", null, referenceData.map((group, gi) => group.sizes.map((size, i) => /*#__PURE__*/React.createElement("tr", {
+    key: `${gi}-${i}`,
+    style: {
+      background: i % 2 === 0 ? '#222' : '#1a1a1a',
+      borderBottom: '1px solid #333'
+    }
+  }, /*#__PURE__*/React.createElement("td", {
+    style: {
+      padding: '0.75rem 1rem',
+      color: '#fbbf24',
+      fontWeight: i === 0 ? 600 : 400
+    }
+  }, i === 0 ? group.ratio : ''), /*#__PURE__*/React.createElement("td", {
+    style: {
+      padding: '0.75rem 1rem',
+      color: '#ccc'
+    }
+  }, size.print), /*#__PURE__*/React.createElement("td", {
+    style: {
+      padding: '0.75rem 1rem',
+      color: '#aaa',
+      textAlign: 'center',
+      fontFamily: 'monospace'
+    }
+  }, size.p), /*#__PURE__*/React.createElement("td", {
+    style: {
+      padding: '0.75rem 1rem',
+      color: '#aaa',
+      textAlign: 'center',
+      fontFamily: 'monospace'
+    }
+  }, size.l))))))), /*#__PURE__*/React.createElement("p", {
+    style: {
+      fontSize: '0.75rem',
+      color: '#666',
+      marginTop: '1rem',
+      marginBottom: 0
+    }
+  }, "\uD83D\uDCA1 All dimensions are for 300 DPI printing. The largest sizes (e.g. 30\xD745, A1) are memory-intensive \u2014 use a desktop or laptop.")), typeof window !== 'undefined' && window.__DFP_STANDALONE__ && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: '#1a1410',
+      border: '1px solid #4a3a1f',
+      borderRadius: '10px',
+      padding: '1.5rem',
+      marginTop: '1.5rem',
+      textAlign: 'center'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: '1rem',
+      fontWeight: 600,
+      color: '#fbbf24',
+      marginBottom: '0.4rem'
+    }
+  }, "Scaling your art \u2014 but still writing prompts and listings by hand?"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      fontSize: '0.9rem',
+      color: '#cdb',
+      lineHeight: 1.6,
+      margin: '0 0 1rem 0',
+      maxWidth: '620px',
+      marginLeft: 'auto',
+      marginRight: 'auto'
+    }
+  }, "You've got the resizing handled. The part that actually eats your hours is the prompts and listings. The full ", /*#__PURE__*/React.createElement("strong", null, "DigitalForge Pro Dashboard"), " turns one idea into a complete, ready-to-sell catalog \u2014 AI prompts, SEO listings, and Pinterest captions \u2014 in a single run, with this Batch Scaler built right in."), /*#__PURE__*/React.createElement("a", {
+    href: "https://digitalforgepro.ai",
+    target: "_blank",
+    rel: "noopener noreferrer",
+    style: {
+      display: 'inline-block',
+      background: '#E8921A',
+      color: '#0C0F1A',
+      fontWeight: 600,
+      fontSize: '0.9rem',
+      textDecoration: 'none',
+      padding: '0.6rem 1.4rem',
+      borderRadius: '6px'
+    }
+  }, "See the full Dashboard \u2192 digitalforgepro.ai"))));
+};
+ReactDOM.createRoot(document.getElementById('root')).render(/*#__PURE__*/React.createElement(App, null));
+  </script>
+<script>
+/* Same-file re-selection fix (Chrome/Edge): Chromium does not fire 'change' when a file input's
+   value is unchanged, so re-picking the SAME file does nothing. Clearing the value on click makes
+   re-selecting the same file fire 'change' consistently across all browsers. */
+(function () {
+  document.addEventListener('click', function (ev) {
+    var el = ev.target;
+    if (el && el.tagName === 'INPUT' && el.type === 'file') { el.value = ''; }
+  }, true);
+})();
+</script>
+</body>
+</html>
