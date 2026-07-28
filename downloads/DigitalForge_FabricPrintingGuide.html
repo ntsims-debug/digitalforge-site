@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<style>
+  @page { size: letter; margin: 0.45in 0.5in; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root{
+    --ink:#0C0F1A; --forge:#E8921A; --forge2:#F5B340; --mist:#B8BDD4;
+    --steel:#6B7699; --teal:#1A9A78; --paper:#FFFFFF; --line:#E4E7F0;
+  }
+  html,body{ font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+    color:var(--ink); font-size:8.7px; line-height:1.62; background:var(--paper); }
+  .wrap{ width:100%; }
+  header{ display:flex; align-items:center; justify-content:space-between;
+    border-bottom:2.5px solid var(--forge); padding-bottom:6px; margin-bottom:9px; }
+  header .title{ font-size:16px; font-weight:800; letter-spacing:-0.3px; }
+  header .title span{ color:var(--forge); }
+  header .sub{ font-size:8px; color:var(--steel); text-align:right; line-height:1.3; }
+  h2{ font-size:9.5px; font-weight:800; text-transform:uppercase; letter-spacing:0.6px;
+    color:var(--ink); margin:12px 0 6px; padding-left:6px; border-left:3px solid var(--forge); }
+  .lead{ color:var(--steel); margin-bottom:6px; }
+  ol.steps{ list-style:none; counter-reset:s; }
+  ol.steps > li{ counter-increment:s; position:relative; padding:4.5px 0 4.5px 20px; }
+  ol.steps > li::before{ content:counter(s); position:absolute; left:0; top:2px;
+    width:14px; height:14px; background:var(--ink); color:#fff; border-radius:50%;
+    font-size:8px; font-weight:700; text-align:center; line-height:14px; }
+  ol.steps b{ color:var(--ink); }
+  .muted{ color:var(--steel); }
+  .callout{ background:#FFF6E9; border:1px solid var(--forge2); border-left:3px solid var(--forge);
+    border-radius:5px; padding:8px 10px; margin:6px 0 3px; line-height:1.68; }
+  .callout .h{ font-weight:800; color:#B4700F; margin-bottom:2px; }
+  .callout b{ color:var(--ink); }
+  table{ width:100%; border-collapse:collapse; margin-top:3px; }
+  th,td{ text-align:left; padding:5.5px 5px; vertical-align:top; border-bottom:1px solid var(--line); line-height:1.5; }
+  th{ background:var(--ink); color:#fff; font-size:7.6px; text-transform:uppercase; letter-spacing:0.4px; }
+  td{ font-size:7.9px; }
+  tr:nth-child(even) td{ background:#F7F8FC; }
+  .svc{ font-weight:700; white-space:nowrap; }
+  .tag{ display:inline-block; background:var(--teal); color:#fff; border-radius:3px;
+    padding:0 4px; font-size:7px; font-weight:700; }
+  .tag.pod{ background:var(--steel); }
+  footer{ margin-top:9px; padding-top:5px; border-top:1px solid var(--line);
+    display:flex; justify-content:space-between; color:var(--steel); font-size:7.6px; }
+  footer b{ color:var(--forge); }
+  .cols{ display:flex; gap:14px; }
+  .cols > div{ flex:1; }
+  .note{ font-size:7.8px; color:var(--steel); margin-top:3px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="title">Digital<span>Forge</span> Pro — Fabric &amp; Pattern Printing Guide</div>
+    <div class="sub">Seamless tiles for Spoonflower &amp; other fabric services<br>digitalforgepro.ai</div>
+  </header>
+
+  <h2>The workflow (using ChatGPT)</h2>
+  <ol class="steps">
+    <li><b>Generate the prompt.</b> In the Dashboard, pick the <b>Surface Patterns — Spoonflower</b> niche, set the generator to ChatGPT/DALL·E, add your style, collection name &amp; vision, then Generate. Prompts are written for seamless repeats.</li>
+    <li><b>(Optional) Prompt Player.</b> Load the prompts CSV to copy each prompt one at a time.</li>
+    <li><b>Make the tile in ChatGPT.</b> Generate a <b>square</b> image — you'll get <b>1024×1024</b>. Ask for a "seamless repeating tile," and regenerate if any motif is clipped awkwardly at an edge.</li>
+    <li><b>Check your size math.</b> At 150 DPI a 1024px tile is crisp to <b>~6.8&Prime;</b>. Largest repeat ≤6&Prime;? skip to step 6. Bigger? do step 5 first.</li>
+    <li><b>Export once, then inspect for softness.</b> Any file tagged <b>_UPSCALED</b> (8/12/18/24&Prime; from a 1024px tile) was enlarged and looks softer — the tool warns you which. If those are too soft, enlarge the tile <i>properly</i> first:
+      <div class="callout">
+        <div class="h">⚠ Fixing soft (upscaled) tiles — never upscale the raw tile, it breaks the seam</div>
+        <b>3×3 (safest):</b> tile 9 copies (3072×3072 for a 1024 tile) → Upscayl at 4× → crop the <b>centre cell</b> (4096×4096, ≈27&Prime; @150). Every edge is upscaled with matching pattern around it, so it stays seamless.<br>
+        <b>2×2 (lighter):</b> 4 copies (2048×2048) → 4× → crop a tile from the <b>centre</b>. Then re-drop &amp; re-export — those sizes are now native, not _UPSCALED.
+      </div>
+    </li>
+    <li><b>Export fabric-ready tiles.</b> Drop the tile in the <b>1:1 (Square)</b> box → set <b>Output DPI</b> (150 for Spoonflower, 300 for printers that prefer it) → <b>Export Spoonflower tiles (ZIP)</b>. Seamless sRGB PNGs, 2–24&Prime;.</li>
+    <li><b>Upload to your service.</b> Pick the size, choose the repeat type, and <b>always check the repeat preview for seams</b> before ordering a swatch.</li>
+  </ol>
+
+  <h2>File requirements by service</h2>
+  <div class="lead">Your export (seamless <b>sRGB PNG</b>) is the right kind of file for every service below — they all want RGB/sRGB (not CMYK) and a seamless tile. <span class="tag">FABRIC</span> printers take your tile directly; <span class="tag pod">POD</span> marketplaces want much bigger files &amp; use their own pattern tools.</div>
+  <table>
+    <thead><tr><th>Service</th><th>Type</th><th>DPI</th><th>Colour</th><th>Formats</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td class="svc">Spoonflower</td><td>Fabric</td><td>150</td><td>sRGB</td><td>PNG / JPG</td><td>Upload one seamless tile; it repeats. Downsamples anything above 150 DPI.</td></tr>
+      <tr><td class="svc">Prinfab <span class="muted">(UK)</span></td><td>Fabric</td><td>180</td><td>sRGB, embed ICC</td><td>PNG / JPG / TIFF</td><td>Upload a single tile; their software repeats it. Repeat preview + Magic Repeat.</td></tr>
+      <tr><td class="svc">Little Cocalico <span class="muted">(US)</span></td><td>Fabric</td><td>300 (150 min)</td><td>RGB</td><td>PNG/TIF/JPG/EPS/PDF</td><td>Upload at intended print size. Kornit pigment; 2–4 day turnaround.</td></tr>
+      <tr><td class="svc">Fabric on Demand <span class="muted">(US)</span></td><td>Fabric</td><td>150–300</td><td>RGB</td><td>PNG / JPG / TIFF</td><td>Repeats your tile &amp; won't resize it (half-drop / step / mirror). Base fabric is white — bake in any bg colour.</td></tr>
+      <tr><td class="svc">RealFabric <span class="muted">(US/NY)</span></td><td>Fabric</td><td>~150–300*</td><td>sRGB*</td><td>—</td><td>File spec not published — use the fabric norm and confirm with them before a large order. Oeko-Tex cotton/silk/poly, no minimums.</td></tr>
+      <tr><td class="svc">Printful</td><td>POD (AOP)</td><td>150 (300 rec)</td><td>sRGB</td><td>PNG / JPG, ≤200MB</td><td>Per-product templates (AOP tee ≈8640×5460px) + built-in seamless pattern tool.</td></tr>
+      <tr><td class="svc">Redbubble</td><td>POD</td><td>pixels, not DPI</td><td>sRGB</td><td>PNG / JPG, ≤13500px</td><td>One upload spans all products; ≈7632×6480px ideal for full bleed. Pattern tool.</td></tr>
+      <tr><td class="svc">Society6</td><td>POD</td><td>300</td><td>RGB only</td><td>PNG / JPG</td><td>Square 12000×12000 recommended (6500×6500 min). CMYK renders inverted.</td></tr>
+    </tbody>
+  </table>
+  <div class="note">* RealFabric doesn't publish a clear file spec; the values shown are the safe fabric-printing norm. For any 300-DPI fabric printer, set the export's Output DPI toggle to 300.</div>
+
+  <footer>
+    <div>DigitalForge Pro · Batch Scaler → Spoonflower tile export</div>
+    <div><b>Always order a swatch before a full run.</b> Screen ≠ fabric.</div>
+  </footer>
+</div>
+</body>
+</html>

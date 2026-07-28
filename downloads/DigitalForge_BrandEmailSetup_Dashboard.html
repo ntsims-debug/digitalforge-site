@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DigitalForge Pro Dashboard — Brand Email Setup</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  :root {
+    --ink:    #0C0F1A;
+    --forge:  #E8921A;
+    --forge2: #F5B340;
+    --mist:   #B8BDD4;
+    --steel:  #6B7699;
+    --white:  #FAFBFF;
+    --teal:   #1A9A78;
+    --warn-bg:#FEF3EC;
+    --warn-bd:#E8921A;
+    --tip-bg: #EEF9F5;
+    --tip-bd: #1A9A78;
+    --note-bg:#F4F5F9;
+    --note-bd:#B8BDD4;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    font-size: 9.5pt;
+    line-height: 1.5;
+    color: var(--ink);
+    background: white;
+  }
+
+  @page { size: letter; margin: 0; }
+
+  .page {
+    page-break-after: always;
+    padding: 0 0.6in 0.4in 0.6in;
+    height: 11in;
+    width: 8.5in;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── COVER ── */
+  .cover {
+    background: var(--ink);
+    color: var(--white);
+    padding: 0.7in 0.8in;
+    position: relative;
+    height: 11in;
+    width: 8.5in;
+    page-break-after: always;
+    box-sizing: border-box;
+  }
+  .cover::after {
+    content: "";
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 6pt;
+    background: var(--forge);
+  }
+  .cover-eyebrow { color: var(--forge); font-size: 10pt; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 18pt; }
+  .cover-title { font-size: 60pt; font-weight: 900; line-height: 0.95; margin-bottom: 14pt; }
+  .cover-title .pro { color: var(--forge); font-size: 60pt; }
+  .cover-title-line2 { color: var(--forge); font-size: 60pt; font-weight: 900; line-height: 0.95; }
+  .cover-subtitle { font-size: 22pt; font-weight: 400; color: var(--mist); margin-bottom: 6pt; }
+  .cover-tagline { font-style: italic; color: var(--steel); font-size: 12pt; margin-bottom: 48pt; }
+  .cover-variant { display: inline-block; background: var(--forge); color: var(--ink); font-size: 9pt; font-weight: 700; padding: 4pt 10pt; border-radius: 3pt; margin-bottom: 36pt; letter-spacing: 0.05em; }
+  .cover-tools { margin-top: 24pt; }
+  .cover-tools-label { font-size: 8pt; font-weight: 600; color: var(--steel); letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 12pt; border-top: 1pt solid #2A2F45; padding-top: 12pt; }
+  .cover-tool { display: flex; align-items: baseline; gap: 10pt; padding: 7pt 0; border-bottom: 1pt solid #1E2236; }
+  .cover-tool-name { font-size: 9pt; font-weight: 700; color: var(--forge); min-width: 110pt; }
+  .cover-tool-desc { font-size: 9pt; color: var(--mist); }
+  .cover-footer { position: absolute; bottom: 20pt; left: 0.8in; right: 0.8in; display: flex; justify-content: space-between; }
+  .cover-footer span { font-size: 8pt; color: var(--steel); }
+  .cover-footer .accent { color: var(--forge); }
+
+  /* ── HEADERS ── */
+  .body-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14pt 0 10pt 0;
+    border-bottom: 0.5pt solid var(--mist);
+    margin-bottom: 14pt;
+    flex-shrink: 0;
+  }
+  .body-header .brand { font-size: 7.5pt; font-weight: 700; color: var(--ink); letter-spacing: 0.12em; text-transform: uppercase; }
+  .body-header .doc-label { font-size: 7.5pt; color: var(--steel); font-family: 'JetBrains Mono', monospace; }
+
+  /* ── SECTION BANNER ── */
+  .section-banner {
+    background: var(--ink);
+    color: var(--white);
+    margin: 0 -0.6in 18pt -0.6in;
+    padding: 16pt 0.6in 18pt 0.6in;
+    flex-shrink: 0;
+  }
+  .section-eyebrow { font-size: 8pt; font-weight: 600; color: var(--forge); letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 4pt; }
+  .section-title { font-size: 26pt; font-weight: 800; color: var(--white); line-height: 1.1; }
+  .section-rule { height: 3pt; background: var(--forge); margin: 0 -0.6in 16pt -0.6in; }
+
+  /* ── PHASE BANNER ── */
+  .phase-banner {
+    display: flex;
+    align-items: center;
+    gap: 12pt;
+    margin: 0 0 10pt 0;
+    padding: 4pt 0 8pt 0;
+    border-bottom: 2pt solid var(--forge);
+  }
+  .phase-num {
+    background: var(--forge);
+    color: var(--white);
+    width: 48pt;
+    height: 48pt;
+    border-radius: 6pt;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .phase-num .lbl { font-size: 6.5pt; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; line-height: 1; }
+  .phase-num .n { font-size: 22pt; font-weight: 900; line-height: 1; }
+  .phase-title { font-size: 22pt; font-weight: 800; color: var(--ink); }
+
+  /* ── TOC ── */
+  .toc-section {
+    display: flex;
+    align-items: baseline;
+    gap: 6pt;
+    padding: 7pt 0;
+    border-bottom: 0.5pt solid var(--note-bg);
+  }
+  .toc-section .label { font-size: 8pt; font-weight: 700; color: var(--forge); min-width: 72pt; }
+  .toc-section .name { flex: 1 1 auto; font-size: 9pt; color: var(--ink); }
+  .toc-section .page-num { font-size: 8pt; color: var(--steel); min-width: 20pt; text-align: right; }
+  .toc-sub { display: flex; align-items: baseline; gap: 6pt; padding: 3pt 0 3pt 16pt; }
+  .toc-sub .arrow { color: var(--forge); }
+  .toc-sub .sub-name { flex: 1 1 auto; font-size: 8.5pt; color: var(--steel); }
+  .toc-sub .sub-page { font-size: 8pt; color: var(--steel); min-width: 20pt; text-align: right; }
+
+  /* ── TYPOGRAPHY ── */
+  h1 { font-size: 18pt; font-weight: 800; margin-bottom: 8pt; color: var(--ink); }
+  h2 { font-size: 11pt; font-weight: 700; margin: 12pt 0 5pt 0; color: var(--ink); }
+  h3 { font-size: 9.5pt; font-weight: 700; color: var(--forge); text-transform: uppercase; letter-spacing: 0.06em; margin: 10pt 0 4pt 0; }
+  p { margin-bottom: 6pt; }
+  ol, ul { padding-left: 16pt; margin-bottom: 6pt; }
+  li { margin-bottom: 3pt; }
+  ol { counter-reset: none; }
+  ol li { list-style: decimal; }
+  ol li::marker { color: var(--forge); font-weight: 700; }
+  ul li { list-style: disc; }
+  ul li::marker { color: var(--forge); }
+  strong { font-weight: 700; }
+  code { font-family: 'JetBrains Mono', monospace; font-size: 8pt; background: var(--note-bg); padding: 1pt 4pt; border-radius: 3pt; }
+
+  /* ── TABLE ── */
+  table { width: 100%; border-collapse: collapse; margin: 8pt 0; font-size: 9pt; }
+  thead tr { background: var(--ink); color: var(--white); }
+  thead th { padding: 6pt 8pt; text-align: left; font-size: 8pt; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--forge); }
+  tbody tr { border-bottom: 0.5pt solid var(--note-bg); }
+  tbody td { padding: 5pt 8pt; vertical-align: top; }
+  .label-col { font-weight: 600; color: var(--ink); width: 35%; }
+
+  /* ── CALLOUTS ── */
+  .callout {
+    border-left: 3pt solid var(--note-bd);
+    background: var(--note-bg);
+    padding: 8pt 10pt;
+    margin: 8pt 0;
+    border-radius: 0 4pt 4pt 0;
+  }
+  .callout.warn { border-left-color: var(--warn-bd); background: var(--warn-bg); }
+  .callout.tip  { border-left-color: var(--tip-bd);  background: var(--tip-bg); }
+  .callout-label { display: block; font-size: 7.5pt; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 4pt; color: var(--forge); }
+  .callout.warn .callout-label { color: #C0390A; }
+  .callout.tip  .callout-label { color: var(--teal); }
+
+  /* ── CODE BLOCK ── */
+  .code-block {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 8pt;
+    background: var(--ink);
+    color: var(--forge2);
+    padding: 10pt 12pt;
+    border-radius: 5pt;
+    margin: 8pt 0;
+    white-space: pre-wrap;
+    line-height: 1.6;
+  }
+
+  /* ── FOOTER ── */
+  .footer-rule {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-top: 0.5pt solid var(--mist);
+    padding-top: 6pt;
+    margin-top: auto;
+    flex-shrink: 0;
+    font-size: 7.5pt;
+    color: var(--steel);
+  }
+  .footer-rule .accent { color: var(--forge); font-weight: 600; }
+
+  /* ── REQUIREMENTS TABLE ── */
+  .req-table { width: 100%; border-collapse: collapse; margin: 8pt 0; }
+  .req-table th { background: var(--ink); color: var(--forge); font-size: 8pt; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; padding: 6pt 8pt; text-align: left; }
+  .req-table td { padding: 5pt 8pt; border-bottom: 0.5pt solid var(--note-bg); font-size: 9pt; vertical-align: top; }
+  .req-table td:first-child { font-weight: 600; width: 40%; }
+  .price { color: var(--forge); font-weight: 700; }
+</style>
+</head>
+<body>
+
+<!-- ============ COVER ============ -->
+<div class="cover">
+  <div class="cover-eyebrow">DigitalForge Pro</div>
+  <div class="cover-title">Brand<br>Email</div>
+  <div class="cover-title-line2">Setup</div>
+  <div class="cover-subtitle" style="margin-top:10pt;">Workflow Guide</div>
+  <div class="cover-tagline">From Gmail to your own domain — in 30 minutes.</div>
+  <div class="cover-variant">v1.0</div>
+
+  <div class="cover-tools">
+    <div class="cover-tools-label">What's Inside</div>
+    <div class="cover-tool"><div class="cover-tool-name">Phase 1</div><div class="cover-tool-desc">Cloudflare Email Routing — receive mail at your domain</div></div>
+    <div class="cover-tool"><div class="cover-tool-name">Phase 2</div><div class="cover-tool-desc">Gmail App Password — authenticate outgoing mail</div></div>
+    <div class="cover-tool"><div class="cover-tool-name">Phase 3</div><div class="cover-tool-desc">Gmail "Send Mail As" — reply from your brand address</div></div>
+    <div class="cover-tool"><div class="cover-tool-name">Phase 4</div><div class="cover-tool-desc">Testing &amp; Email Signature</div></div>
+  </div>
+
+  <div class="cover-footer">
+    <span>v1.0</span>
+    <span class="accent">digitalforgepro.ai</span>
+  </div>
+</div>
+
+<!-- ============ TABLE OF CONTENTS ============ -->
+<div class="page">
+  <div class="body-header">
+    <span class="brand">DIGITALFORGE</span>
+    <span class="doc-label">Brand Email Setup</span>
+  </div>
+
+  <div class="section-banner">
+    <div class="section-eyebrow">Contents</div>
+    <h1 class="section-title">What's Inside</h1>
+  </div>
+
+  <div class="toc-section"><span class="label">Start Here</span><span class="name">Why This Matters &amp; What You Need</span><span class="page-num">3</span></div>
+
+  <div class="toc-section"><span class="label">Phase 1</span><span class="name">Cloudflare Email Routing + DMARC</span><span class="page-num">5</span></div>
+  <div class="toc-sub"><span class="arrow">→</span><span class="sub-name">Enable routing, create addresses, catch-all, DMARC record</span><span class="sub-page">5</span></div>
+
+  <div class="toc-section"><span class="label">Phase 2</span><span class="name">Gmail App Password</span><span class="page-num">8</span></div>
+
+  <div class="toc-section"><span class="label">Phase 3</span><span class="name">Gmail "Send Mail As"</span><span class="page-num">9</span></div>
+
+  <div class="toc-section"><span class="label">Phase 4</span><span class="name">Testing &amp; Email Signature</span><span class="page-num">11</span></div>
+
+  <div class="toc-section"><span class="label">Reference</span><span class="name">Common Gotchas &amp; Troubleshooting</span><span class="page-num">13</span></div>
+
+  <div class="toc-section"><span class="label">More Tools</span><span class="name">About DigitalForge Pro</span><span class="page-num">14</span></div>
+
+  <div class="toc-section"><span class="label">Appendix</span><span class="name">Version History</span><span class="page-num">15</span></div>
+
+  <div class="footer-rule">
+    <span class="accent">digitalforgepro.ai</span>
+    <span>Receive and send from your own domain.</span>
+    <span>Page 2</span>
+  </div>
+</div>
+
+<!-- ============ START HERE ============ -->
+<div class="page">
+  <div class="body-header">
+    <span class="brand">DIGITALFORGE</span>
+    <span class="doc-label">Brand Email Setup</span>
+  </div>
+
+  <div class="section-banner">
+    <div class="section-eyebrow">Start Here</div>
+    <h1 class="section-title">Why This Matters &amp; What You Need</h1>
+  </div>
+
+  <p>If you sell digital products under a brand name, your email address matters. Replying to a customer from <code>yourname@gmail.com</code> signals "side project." Replying from <code>support@yourbrand.com</code> signals "real business." Buyers notice. So do affiliates, press contacts, and platform reviewers.</p>
+
+  <p>This guide gets you there in about 30 minutes, using only free services on top of your existing domain. At the end you will be able to receive email at any address on your domain, and send from those addresses directly inside your existing Gmail — with no unsubscribe prompt added to your replies.</p>
+
+  <h2>What You Will Have at the End</h2>
+  <ul>
+    <li><code>support@yourdomain.com</code>, <code>info@yourdomain.com</code>, and any other address you want — all forwarding to your Gmail inbox</li>
+    <li>A catch-all address — every email to <code>anything@yourdomain.com</code> lands in your Gmail</li>
+    <li>The ability to compose and reply as those addresses from Gmail — recipients see your brand domain, not your Gmail</li>
+    <li>No unsubscribe prompt added to your replies</li>
+  </ul>
+
+  <h2>How This Stack Works</h2>
+  <p>Two free services, each doing one job:</p>
+  <ul>
+    <li><strong>Cloudflare Email Routing</strong> — receives mail at your domain, forwards to Gmail</li>
+    <li><strong>Gmail App Password</strong> — authenticates outgoing mail through Google's own servers</li>
+  </ul>
+
+  <h2>What You Need Before Starting</h2>
+  <p>See next page for requirements, then continue to Phase 1.</p>
+
+  <div class="footer-rule">
+    <span class="accent">digitalforgepro.ai</span>
+    <span>Receive and send from your own domain.</span>
+    <span>Page 3</span>
+  </div>
+</div>
+
+<!-- ============ START HERE CONTINUED ============ -->
+<div class="page">
+  <div class="body-header">
+    <span class="brand">DIGITALFORGE</span>
+    <span class="doc-label">Brand Email Setup</span>
+  </div>
+
+  <h2>What You Need Before Starting</h2>
+  <table class="req-table">
+    <thead><tr><th>Requirement</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td>A registered domain</td><td>Already owned (e.g. yourbrand.com or .ai or .shop)</td></tr>
+      <tr><td>DNS managed by Cloudflare</td><td>Free tier is fine. Point your nameservers to Cloudflare — your domain stays registered where it is</td></tr>
+      <tr><td>A Gmail account</td><td>Personal or workspace, both work</td></tr>
+      <tr><td>2-Step Verification on Google</td><td>Required to create an App Password</td></tr>
+      <tr><td>About 30 minutes</td><td>Plus a few minutes of DNS propagation wait time</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout tip">
+    <span class="callout-label">✓ Total Cost</span>
+    Zero on top of what you already pay for the domain. Cloudflare Email Routing is free. Gmail is free. The only thing you pay for is the domain itself, which you already own.
+  </div>
+
+  <div class="footer-rule">
+    <span class="accent">digitalforgepro.ai</span>
+    <span>Receive and send from your own domain.</span>
+    <span>Page 4</span>
+  </div>
+</div>
+
+<!-- ============ PHASE 1 ============ -->
+<div class="page">
+  <div class="body-header">
+    <span class="brand">DIGITALFORGE</span>
+    <span class="doc-label">Brand Email Setup</span>
+  </div>
+
+  <div class="phase-banner">
+    <div class="phase-num"><span class="lbl">PHASE</span><span class="n">1</span></div>
+    <h1 class="phase-title">Cloudflare Email Routing + DMARC</h1>
+  </div>
+
+  <p>Cloudflare Email Routing receives mail sent to any address on your domain and forwards it to your Gmail. DMARC is added in this phase since it protects your domain's sending reputation regardless of which outgoing mail path you use.</p>
+
+  <h2>Step 1 — Get to the Email Routing Page</h2>
+  <ol>
+    <li>Log in to the Cloudflare dashboard at <code>dash.cloudflare.com</code></li>
+    <li>From the home screen, click <strong>Domains</strong> in the left sidebar</li>
+    <li>Click on your domain (the domain name itself, not just hover)</li>
+    <li>In the left sidebar, look for <strong>Email</strong> — listed right below DNS</li>
+    <li>Click <strong>Email</strong> → click <strong>Email Routing</strong></li>
+  </ol>
+
+  <div class="callout warn">
+    <span class="callout-label">⚠ Common Stuck Point</span>
+    If you do not see "Email" in the sidebar, you are not inside a specific domain. Go back to <strong>Domains</strong>, click the domain name itself, and try again.
+  </div>
+
+  <h2>Step 2 — Enable Email Routing</h2>
+  <ol>
+    <li>Click <strong>Get Started</strong> (or <strong>Enable Email Routing</strong>)</li>
+    <li>Cloudflare shows the DNS records it needs to add automatically — typically 3 MX records and 1 TXT record for SPF</li>
+    <li>Click <strong>Add records and enable</strong></li>
+  </ol>
+
+  <p>These records are locked so you do not accidentally break them later. Email Routing is now active on the domain.</p>
+
+  <h2>Step 3 — Verify Your Gmail as a Destination</h2>
+  <ol>
+    <li>Cloudflare asks for a destination email — enter your Gmail address</li>
+    <li>Cloudflare sends a verification email to your Gmail</li>
+    <li>Open your Gmail, find the Cloudflare verification email, click the link</li>
+    <li>Return to Cloudflare — your Gmail now shows as a verified destination</li>
+  </ol>
+
+  <div class="footer-rule">
+    <span class="accent">digitalforgepro.ai</span>
+    <span>Receive and send from your own domain.</span>
+    <span>Page 5</span>
+  </div>
+</div>
+
+<!-- ============ PHASE 1 CONTINUED ============ -->
+<div class="page">
+  <div class="body-header">
+    <span class="brand">DIGITALFORGE</span>
+    <span class="doc-label">Brand Email Setup</span>
+  </div>
+
+  <h2>Step 4 — Create Your Custom Addresses</h2>
+  <p>Click the <strong>Routes</strong> tab. Under <strong>Custom addresses</strong>, click <strong>Create address</strong> and add each one:</p>
+
+  <table>
+    <thead><tr><th>Custom Address</th><th>Action</th><th>Destination</th></tr></thead>
+    <tbody>
+      <tr><td class="label-col"><code>support</code></td><td>Send to an email</td><td>your Gmail</td></tr>
+      <tr><td class="label-col"><code>info</code></td><td>Send to an email</td><td>your Gmail</td></tr>
+    </tbody>
+  </table>
+
+  <p>Cloudflare auto-fills <code>@yourdomain.com</code>. Click <strong>Save</strong> after each.</p>
+
+  <h2>Step 5 — Enable the Catch-All</h2>
+  <p>This is the key step. With catch-all on, every email to any address on your domain forwards to Gmail — no per-address configuration required.</p>
+  <ol>
+    <li>Still on the <strong>Routes</strong> page, scroll to the <strong>Catch-all address</strong> section</li>
+    <li>Toggle the catch-all switch to <strong>Active</strong></li>
+    <li>Action: <strong>Send to an email</strong></li>
+    <li>Destination: your Gmail</li>
+    <li>Click <strong>Save</strong></li>
+  </ol>
+
+  <h2>Step 6 — Add a DMARC Record</h2>
+  <p>DMARC protects your domain from spoofing and improves inbox delivery. In Cloudflare, click your domain → <strong>DNS</strong> → <strong>Records</strong> → <strong>Add record</strong>.</p>
+
+  <table>
+    <thead><tr><th>Field</th><th>Value</th></tr></thead>
+    <tbody>
+      <tr><td class="label-col">Type</td><td>TXT</td></tr>
+      <tr><td class="label-col">Name</td><td><code>_dmarc</code></td></tr>
+      <tr><td class="label-col">TTL</td><td>1 hr</td></tr>
+    </tbody>
+  </table>
+
+  <p>For <strong>Content</strong>, paste this (replace the email with your Gmail):</p>
+  <pre class="code-block">v=DMARC1; p=none; rua=mailto:you@gmail.com; fo=1; aspf=r; adkim=r</pre>
+
+  <p><code>p=none</code> is monitoring mode — safe to start with. After a few weeks of normal mail flow, you can tighten to <code>p=quarantine</code>.</p>
+
+  <div class="callout tip">
+    <span class="callout-label">✓ SPF is Already Done</span>
+    Cloudflare Email Routing automatically added an SPF record when you enabled it in Step 2. No manual SPF editing is needed for the Gmail SMTP path.
+  </div>
+
+  <div class="footer-rule">
+    <span class="accent">digitalforgepro.ai</span>
+    <span>Receive and send from your own domain.</span>
+    <span>Page 6</span>
+  </div>
+</div>
+
+<!-- ============ PHASE 1 CONTINUED — WHAT YOU HAVE NOW + ROUTING CHECK ============ -->
+<div class="page">
+  <div class="body-header">
+    <span class="brand">DIGITALFORGE</span>
+    <span class="doc-label">Brand Email Setup</span>
+  </div>
+
+  <h2>Step 7 — Test Inbound Routing</h2>
+  <p>From a separate email account (phone, another Gmail, a friend), send a test message to <code>support@yourdomain.com</code>. It should arrive in your Gmail inbox within a minute or two. If it does not arrive after 5 minutes, DNS may still be propagating — wait 15 minutes and try again.</p>
+
+  <div class="callout tip">
+    <span class="callout-label">✓ What You Have Now</span>
+    Inbound routing is complete. Any email sent to any address on your domain — including addresses you have never set up — arrives in your Gmail. Phase 2 sets up the outgoing side so you can reply from those addresses.
+  </div>
+
+  <h2>Routing Reference Table</h2>
+  <table>
+    <thead><tr><th>Scenario</th><th>Result</th></tr></thead>
+    <tbody>
+      <tr><td class="label-col">Email to <code>support@yourdomain.com</code></td><td>Arrives in Gmail inbox</td></tr>
+      <tr><td class="label-col">Email to <code>info@yourdomain.com</code></td><td>Arrives in Gmail inbox</td></tr>
+      <tr><td class="label-col">Email to <code>anything@yourdomain.com</code></td><td>Arrives in Gmail inbox (catch-all)</td></tr>
+      <tr><td class="label-col">Reply from Gmail</td><td>Sends from your Gmail address — until Phase 3 is complete</td></tr>
+    </tbody>
+  </table>
+
+  <div class="footer-rule">
+    <span class="accent">digitalforgepro.ai</span>
+    <span>Receive and send from your own domain.</span>
+    <span>Page 7</span>
+  </div>
+</div>
+
+<!-- ============ PHASE 2 — GMAIL APP PASSWORD ============ -->
+<div class="page">
+  <div class="body-header">
+    <span class="brand">DIGITALFORGE</span>
+    <span class="doc-label">Brand Email Setup</span>
+  </div>
+
+  <div class="phase-banner">
+    <div class="phase-num"><span class="lbl">PHASE</span><span class="n">2</span></div>
+    <h1 class="phase-title">Gmail App Password</h1>
+  </div>
+
+  <p>Gmail requires an App Password to authenticate outgoing mail from a third-party alias. This is different from your regular Gmail password — it is a 16-character code generated specifically for this use.</p>
+
+  <h2>Step 1 — Enable 2-Step Verification</h2>
+  <p>App Passwords require 2-Step Verification to be active. If it is already on, skip this step.</p>
+  <ol>
+    <li>Go to <code>myaccount.google.com</code></li>
+    <li>Click <strong>Security</strong> in the left sidebar</li>
+    <li>Find <strong>2-Step Verification</strong> → click through to enable it</li>
+  </ol>
+
+  <h2>Step 2 — Create an App Password</h2>
+  <ol>
+    <li>Go to <code>myaccount.google.com</code> → <strong>Security</strong></li>
+    <li>Under "How you sign in to Google," click <strong>2-Step Verification</strong></li>
+    <li>Scroll to the bottom → click <strong>App passwords</strong></li>
+    <li>Name it <code>Gmail Send Mail As</code> → click <strong>Create</strong></li>
+    <li><strong>Copy the 16-character password immediately</strong> — Google only shows it once</li>
+  </ol>
+
+  <div class="callout tip">
+    <span class="callout-label">✓ App Password Format</span>
+    Google shows the password as four groups of four letters (e.g. <code>abcd efgh ijkl mnop</code>). Paste it exactly as shown — Gmail accepts it with or without spaces.
+  </div>
+
+  <h2>SMTP Credentials for Phase 3</h2>
+  <p>Keep these values handy — you will enter them in Phase 3:</p>
+  <table>
+    <thead><tr><th>Field</th><th>Value</th></tr></thead>
+    <tbody>
+      <tr><td class="label-col">SMTP Server</td><td><code>smtp.gmail.com</code></td></tr>
+      <tr><td class="label-col">Port</td><td><code>587</code></td></tr>
+      <tr><td class="label-col">Username</td><td>Your full Gmail address (e.g. <code>you@gmail.com</code>)</td></tr>
+      <tr><td class="label-col">Password</td><td>The 16-character App Password — <strong>not</strong> your Gmail password</td></tr>
+      <tr><td class="label-col">Secured connection</td><td>TLS</td></tr>
+    </tbody>
+  </table>
+
+  <div class="footer-rule">
+    <span class="accent">digitalforgepro.ai</span>
+    <span>Receive and send from your own domain.</span>
+    <span>Page 8</span>
+  </div>
+</div>
+
+<!-- ============ PHASE 3 — GMAIL SEND MAIL AS ============ -->
+<div class="page">
+  <div class="body-header">
+    <span class="brand">DIGITALFORGE</span>
+    <span class="doc-label">Brand Email Setup</span>
+  </div>
+
+  <div class="phase-banner">
+    <div class="phase-num"><span class="lbl">PHASE</span><span class="n">3</span></div>
+    <h1 class="phase-title">Gmail "Send Mail As"</h1>
+  </div>
+
+  <p>This phase configures Gmail to send email using your brand domain address as the From field, routed through Google's own servers.</p>
+
+  <h2>Step 1 — Open Gmail Settings</h2>
+  <ol>
+    <li>In Gmail, click the <strong>gear icon</strong> (top-right) → <strong>See all settings</strong></li>
+    <li>Click the <strong>Accounts and Import</strong> tab</li>
+    <li>Under <strong>Send mail as</strong>, click <strong>Add another email address</strong></li>
+  </ol>
+
+  <h2>Step 2 — Add Your Brand Address</h2>
+  <ol>
+    <li>Name: your brand name (e.g. <code>Maison du Zenith</code>)</li>
+    <li>Email address: <code>support@yourdomain.com</code></li>
+    <li>Leave <strong>Treat as an alias</strong> checked</li>
+    <li>Click <strong>Next Step</strong></li>
+  </ol>
+
+  <h2>Step 3 — Enter SMTP Credentials</h2>
+  <ol>
+    <li>SMTP Server: <code>smtp.gmail.com</code></li>
+    <li>Port: <code>587</code></li>
+    <li>Username: your full Gmail address</li>
+    <li>Password: the 16-character App Password from Phase 2</li>
+    <li>Select <strong>Secured connection using TLS</strong></li>
+    <li>Click <strong>Add Account</strong></li>
+  </ol>
+
+  <div class="callout warn">
+    <span class="callout-label">⚠ If Add Account Fails</span>
+    <strong>"Authentication failed"</strong> → wrong App Password. Return to Phase 2 and generate a new one. <strong>"Could not connect"</strong> → wrong port. Must be 587 with TLS.
+  </div>
+
+  <div class="footer-rule">
+    <span class="accent">digitalforgepro.ai</span>
+    <span>Receive and send from your own domain.</span>
+    <span>Page 9</span>
+  </div>
+</div>
+
+<!-- ============ PHASE 3 CONTINUED ============ -->
+<div class="page">
+  <div class="body-header">
+    <span class="brand">DIGITALFORGE</span>
+    <span class="doc-label">Brand Email Setup</span>
+  </div>
+
+  <h2>Step 4 — Verify the Address</h2>
+  <p>Gmail sends a verification email to your new alias. Because of Cloudflare Email Routing (Phase 1), that verification email arrives in your regular Gmail inbox.</p>
+  <ol>
+    <li>Open the verification email from Gmail</li>
+    <li>Click the verification link, OR copy the verification code into Gmail's popup</li>
+    <li>Done — your alias is now usable</li>
+  </ol>
+
+  <h2>Step 5 — Set Reply Behavior</h2>
+  <p>Gmail no longer prompts for this during setup — you need to set it manually.</p>
+  <ol>
+    <li>In Gmail, click the <strong>gear icon</strong> (top-right) → <strong>See all settings</strong></li>
+    <li>Click the <strong>Accounts and Import</strong> tab</li>
+    <li>Find the <strong>"When replying to a message:"</strong> section</li>
+    <li>Select <strong>"Reply from the same address the message was sent to"</strong></li>
+    <li>Click <strong>Save Changes</strong> at the bottom of the page</li>
+  </ol>
+
+  <p>This means when someone emails <code>support@yourdomain.com</code>, your reply automatically sends from that address — no manual dropdown selection needed.</p>
+
+  <h2>Optional — Set Default for New Mail</h2>
+  <p>Still under <strong>Accounts and Import → Send mail as</strong>, you can choose which address is the default for composing new emails. Keep your personal Gmail as default for everyday mail. Use the <strong>From</strong> dropdown when composing brand-related messages.</p>
+
+  <h2>Repeat for Additional Addresses</h2>
+  <p>If you want to also send from <code>info@yourdomain.com</code> or any other address, repeat Steps 1–5 with the new address. The App Password is the same — only the identity (Name + Email address) changes.</p>
+
+  <div class="callout tip">
+    <span class="callout-label">✓ One App Password, Many Addresses</span>
+    The App Password authenticates your Gmail account as a sender, not a specific address. You can add unlimited custom addresses in Gmail using the same App Password.
+  </div>
+
+  <div class="footer-rule">
+    <span class="accent">digitalforgepro.ai</span>
+    <span>Receive and send from your own domain.</span>
+    <span>Page 10</span>
+  </div>
+</div>
+
+<!-- ============ PHASE 4 — TESTING & SIGNATURE ============ -->
+<div class="page">
+  <div class="body-header">
+    <span class="brand">DIGITALFORGE</span>
+    <span class="doc-label">Brand Email Setup</span>
+  </div>
+
+  <div class="phase-banner">
+    <div class="phase-num"><span class="lbl">PHASE</span><span class="n">4</span></div>
+    <h1 class="phase-title">Testing &amp; Email Signature</h1>
+  </div>
+
+  <h2>The End-to-End Test</h2>
+  <ol>
+    <li>From a separate email (phone, second Gmail, another account), send a message to <code>support@yourdomain.com</code></li>
+    <li>Confirm it lands in your Gmail inbox (not spam)</li>
+    <li>Open the email in Gmail → click <strong>Reply</strong></li>
+    <li>Verify the <strong>From</strong> dropdown shows your brand identity and address</li>
+    <li>Send the reply</li>
+    <li>Check the receiving inbox — the reply should arrive showing your brand address as the sender, with no Unsubscribe prompt</li>
+  </ol>
+
+  <h2>Verify Authentication Passes</h2>
+  <p>In Gmail, open the received reply → click the three dots → <strong>Show original</strong>. Look for:</p>
+
+  <table>
+    <thead><tr><th>Check</th><th>Expected Result</th></tr></thead>
+    <tbody>
+      <tr><td class="label-col">SPF</td><td>PASS</td></tr>
+      <tr><td class="label-col">DKIM</td><td>PASS</td></tr>
+      <tr><td class="label-col">DMARC</td><td>PASS or none (DMARC alignment may not be fully enforced for Gmail SMTP — this is normal)</td></tr>
+    </tbody>
+  </table>
+
+  <p>SPF and DKIM passing means your emails are authenticated and will land in inboxes reliably.</p>
+
+  <h2>Set Up Your Email Signature</h2>
+  <p>In Gmail Settings → General → Signature → create a new signature for your support address. Keep it plain text — corporate signature blocks with large logos make replies feel automated. Plain text feels more genuine for customer support.</p>
+
+  <pre class="code-block">Your Name
+YourBrand
+yourdomain.com
+
+One-line tagline describing what your brand does.</pre>
+
+  <div class="footer-rule">
+    <span class="accent">digitalforgepro.ai</span>
+    <span>Receive and send from your own domain.</span>
+    <span>Page 11</span>
+  </div>
+</div>
+
+<!-- ============ PHASE 4 CONTINUED ============ -->
+<div class="page">
+  <div class="body-header">
+    <span class="brand">DIGITALFORGE</span>
+    <span class="doc-label">Brand Email Setup</span>
+  </div>
+
+  <div class="callout tip">
+    <span class="callout-label">✓ First-Week Tip</span>
+    Even with proper authentication, brand-new domains have zero sender reputation. Send 5–10 manual messages over the first week, ask recipients to mark "Not Spam" if any land there. Reputation builds in 2–4 weeks of normal sending.
+  </div>
+
+  <p>That is the entire setup. Your domain is now configured to receive mail via Cloudflare and send via Gmail's own servers. Replies carry no unsubscribe prompt and are authenticated via your Google account.</p>
+
+  <p>If you run into trouble during real-world use, the next page lists every common issue we have seen — chances are good your problem and its fix are already there.</p>
+
+  <div class="footer-rule">
+    <span class="accent">digitalforgepro.ai</span>
+    <span>Receive and send from your own domain.</span>
+    <span>Page 12</span>
+  </div>
+</div>
+
+<!-- ============ REFERENCE ============ -->
+<div class="page">
+  <div class="body-header">
+    <span class="brand">DIGITALFORGE</span>
+    <span class="doc-label">Brand Email Setup</span>
+  </div>
+
+  <div class="section-banner">
+    <div class="section-eyebrow">Reference</div>
+    <h1 class="section-title">Common Gotchas &amp; Troubleshooting</h1>
+  </div>
+
+  <table>
+    <thead><tr><th>Symptom</th><th>Fix</th></tr></thead>
+    <tbody>
+      <tr><td class="label-col">"Email" not in Cloudflare sidebar</td><td>You are not inside a specific domain. Go to <strong>Domains</strong> → click your domain name → look again.</td></tr>
+      <tr><td class="label-col">Verification email from Cloudflare not arriving</td><td>Check spam. Wait 5 minutes. If still nothing, re-enter your Gmail address in Cloudflare and resend.</td></tr>
+      <tr><td class="label-col">Test emails to your domain bounce</td><td>DNS not yet propagated. Wait 15 minutes and retry.</td></tr>
+      <tr><td class="label-col">Gmail "Add Account" fails — Authentication error</td><td>Wrong App Password. Go back to Phase 2 and generate a new one. Make sure you are pasting it correctly (16 characters, no extra spaces).</td></tr>
+      <tr><td class="label-col">Gmail "Add Account" fails — Cannot connect</td><td>Wrong port. Must be 587 with TLS selected (not 465, not 25).</td></tr>
+      <tr><td class="label-col">Replies sending from personal Gmail, not brand address</td><td>Reply Behavior not set. Go to Gmail Settings → Accounts and Import → "When replying to a message:" → select "Reply from the same address".</td></tr>
+      <tr><td class="label-col">Sent emails landing in spam</td><td>New domain has no reputation yet. Ask first recipients to mark Not Spam. Normal within 2–4 weeks of regular sending.</td></tr>
+      <tr><td class="label-col">App Password option not visible</td><td>2-Step Verification is not enabled. Enable it first at myaccount.google.com → Security, then return to generate the App Password.</td></tr>
+      <tr><td class="label-col">DMARC shows "none" in Show Original</td><td>Expected for Gmail SMTP — Google signs with their DKIM which may not fully align with your domain's DMARC policy. SPF and DKIM passing is what matters for deliverability.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="footer-rule">
+    <span class="accent">digitalforgepro.ai</span>
+    <span>Receive and send from your own domain.</span>
+    <span>Page 13</span>
+  </div>
+</div>
+
+<!-- ============ MORE TOOLS ============ -->
+<div class="page">
+  <div class="body-header">
+    <span class="brand">DIGITALFORGE</span>
+    <span class="doc-label">Brand Email Setup</span>
+  </div>
+
+  <div class="section-banner">
+    <div class="section-eyebrow">More Tools</div>
+    <h1 class="section-title">About DigitalForge Pro Dashboard</h1>
+  </div>
+
+  <p>This guide is a free bonus included with DigitalForge Pro Dashboard — the unified tool that automates the most time-consuming parts of running a digital product shop on Etsy, Gumroad, or Shopify. Generate prompts, write listings, and batch-process images, all from one interface.</p>
+
+  <h2>What's in the Dashboard</h2>
+  <ul>
+    <li><strong>AI Prompt Generator</strong> — 12 niche presets, generates prompts formatted for Midjourney, Firefly, DALL-E, and 6 more AI image tools, with auto-selected orientation per niche</li>
+    <li><strong>Listing Generator</strong> — writes complete SEO-optimized Etsy/Gumroad/Shopify listings (title, description, validated tags, Pinterest caption) for your entire collection in one run</li>
+    <li><strong>Prompt Player</strong> — works through your prompt list one by one, with one-click copy as you generate images in your AI tool</li>
+    <li><strong>Batch Scaler</strong> — slices one finished master image into every standard print size across 6 aspect ratios (2:3, 3:4, 4:5, 5:7, 11:14, ISO A-series) plus square, in both orientations, as JPG and PDF at 300 DPI — organized into folders and delivered as a single ZIP, ready to upload</li>
+  </ul>
+
+  <h2>What You Have Now</h2>
+  <p>Your full email stack is wired up using Google's own infrastructure. Customer emails to <code>support@yourdomain.com</code> arrive in Gmail. Replies go back from <code>support@yourdomain.com</code> with no unsubscribe prompt. Recipients see your brand domain in both directions.</p>
+
+  <div class="callout tip">
+    <span class="callout-label">✓ Upgrade Path</span>
+    As your shop grows, Google Workspace (~$6–12/month) gives you a native @yourdomain.com Gmail account — no aliases, no App Passwords, no workarounds at all. The Gmail SMTP path you set up today is the natural stepping stone to that upgrade.
+  </div>
+
+  <div class="callout">
+    <span class="callout-label">💬 Feedback?</span>
+    Email <strong>norm@digitalforgepro.ai</strong> with your thoughts, questions, or any issues you run into. We read every message and use your feedback to improve the Dashboard.
+  </div>
+
+  <div class="footer-rule">
+    <span class="accent">digitalforgepro.ai</span>
+    <span>Receive and send from your own domain.</span>
+    <span>Page 14</span>
+  </div>
+</div>
+
+<!-- ============ APPENDIX — VERSION HISTORY ============ -->
+<div class="page">
+  <div class="body-header">
+    <span class="brand">DIGITALFORGE</span>
+    <span class="doc-label">Brand Email Setup</span>
+  </div>
+
+  <div class="section-banner">
+    <div class="section-eyebrow">Appendix</div>
+    <h1 class="section-title">Version History</h1>
+  </div>
+
+  <table>
+    <thead><tr><th>Version</th><th>Changes</th></tr></thead>
+    <tbody>
+      <tr><td class="label-col"><strong>v1.0</strong><br>2026</td><td>Brand email setup using Cloudflare Email Routing for inbound mail and Gmail "Send Mail As" with a Google App Password for outbound. Four-phase workflow: Cloudflare routing + DMARC, App Password generation, Gmail Send Mail As configuration, and end-to-end testing. Uses only free services — no paid relay or subscription required. Outgoing replies carry no unsubscribe prompt and are authenticated via your Google account.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="footer-rule">
+    <span class="accent">digitalforgepro.ai</span>
+    <span>Receive and send from your own domain.</span>
+    <span>Page 15</span>
+  </div>
+</div>
+
+</body>
+</html>
